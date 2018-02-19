@@ -4,6 +4,7 @@
 
 #include <config.h>
 #include <vector>
+#include <string>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -27,6 +28,11 @@ class TestMain {
   void     createPipelineLayout();
   void     createSwapchain();
   void     createImageViews();
+  void     createPipeline();
+  void     createRenderPass();
+  void     createFramebuffer();
+
+  VkShaderModule   createShaderModule(const std::vector<char>& code);
 
   GLFWwindow       *window;
   VkSurfaceKHR     surface;
@@ -46,11 +52,14 @@ class TestMain {
 
   VkDescriptorSetLayout setLayout;
   VkPipelineLayout      pipelineLayout;
+  VkPipeline            graphicsPipeline;
+  VkRenderPass          renderPass;
 
   VkSwapchainKHR swapChain;
   VkFormat swapChainImageFormat;
   VkExtent2D swapChainExtent;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
+  std::vector<VkFramebuffer> swapChainFramebuffers;
 
 };
