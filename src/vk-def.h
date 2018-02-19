@@ -25,6 +25,7 @@ class TestMain {
   void     getQueue();
   void     createCommandBuffer();
   void     createPipelineLayout();
+  void     createSwapchain();
 
   GLFWwindow       *window;
   VkSurfaceKHR     surface;

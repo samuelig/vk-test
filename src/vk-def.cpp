@@ -217,8 +217,102 @@ void TestMain::createPipelineLayout()
   printf("Created pipeline layout\n");
 }
 
+void TestMain::createSwapchain()
+{
+  VkResult res = VK_SUCCESS;
+  VkSurfaceCapabilitiesKHR capabilities;
+  std::vector<VkSurfaceFormatKHR> formats;
+  std::vector<VkPresentModeKHR> presentModes;
+
+  /* Ask for the surface capabilities in the device */
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phyDevice, surface, &capabilities);
+
+  printf("Surface capabilities:\n");
+  printf("\tminImageCount: %d\n", capabilities.minImageCount);
+  printf("\tmaxImageCount: %d\n", capabilities.maxImageCount);
+  printf("\tcurrentExtent: %d x %d\n", capabilities.currentExtent.width, capabilities.currentExtent.height);
+  printf("\tminImageExtent: %d x %d\n", capabilities.minImageExtent.width, capabilities.minImageExtent.height);
+  printf("\tmaxImageExtent: %d x %d\n", capabilities.maxImageExtent.width, capabilities.maxImageExtent.height);
+  printf("\tsupportedTransforms: %d\n", capabilities.supportedTransforms);
+  printf("\tcurrentTransform: %d\n", capabilities.currentTransform);
+  printf("\tsupportedCompositeAlpha: %d\n", capabilities.supportedCompositeAlpha);
+  printf("\tsupportedUsageFlags: %d\n", capabilities.supportedUsageFlags);
+
+  /* Get supported formats by the surface */
+  uint32_t formatCount;
+  vkGetPhysicalDeviceSurfaceFormatsKHR(phyDevice, surface, &formatCount, VK_NULL_HANDLE);
+
+  if (formatCount != 0) {
+    formats.resize(formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(phyDevice, surface, &formatCount, formats.data());
+  }
+
+  VkSurfaceFormatKHR surfaceFormat;
+  surfaceFormat.format = VK_FORMAT_UNDEFINED;
+
+  for (int i = 0; i < formatCount; i++) {
+    if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
+      surfaceFormat = formats[i];
+      break;
+    }
+  }
+
+  /* XXX: Implement a way of selecting a different format if this fails */
+  if (surfaceFormat.format == VK_FORMAT_UNDEFINED)
+    throw std::runtime_error("VK_FORMAT_B8G8R8A8_UNORM is not supported\n");
+
+#if 0
+  /* Get the presentation modes supported */
+  uint32_t presentModeCount;
+  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, VK_NULL_HANDLE);
+
+  if (presentModeCount != 0) {
+    presentModes.resize(presentModeCount);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, presentModes.data());
+  }
+  /* XXX: Implement a way of selecting the presentation mode */
+  VkPresentModeKHR presentMode = presentModes[0];
+#else
+  /* This presentation mode is always supported according to the spec */
+  VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+#endif
+
+  /* Select the extend to current window size */
+  swapChainExtent = {WIDTH, HEIGHT};
+
+  unsigned imageCount = (capabilities.minImageCount >= 2) ?
+    capabilities.minImageCount : capabilities.minImageCount + 1;
+
+  VkSwapchainCreateInfoKHR createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  createInfo.surface = surface;
+  createInfo.minImageCount = imageCount;
+  createInfo.imageFormat = surfaceFormat.format;
+  createInfo.imageColorSpace = surfaceFormat.colorSpace;
+  createInfo.imageExtent = swapChainExtent;
+  createInfo.imageArrayLayers = 1;
+  createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  createInfo.preTransform = capabilities.currentTransform;
+  createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  createInfo.presentMode = presentMode;
+  createInfo.clipped = VK_TRUE;
+  createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+  res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating swapchain");
+
+
+  vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+  swapChainImages.resize(imageCount);
+  vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+  swapChainImageFormat = surfaceFormat.format;
+}
+
 void TestMain::cleanup()
 {
+  vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
   vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
   vkDestroyDescriptorSetLayout(device, setLayout, VK_NULL_HANDLE);
   vkDestroyCommandPool(device, cmdPool, VK_NULL_HANDLE);
@@ -239,6 +333,7 @@ void TestMain::init()
   getQueue();
   createCommandBuffer();
   createPipelineLayout();
+  createSwapchain();
 }
 
 void TestMain::run()
