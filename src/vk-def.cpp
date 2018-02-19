@@ -250,7 +250,7 @@ void TestMain::createSwapchain()
   VkSurfaceFormatKHR surfaceFormat;
   surfaceFormat.format = VK_FORMAT_UNDEFINED;
 
-  for (int i = 0; i < formatCount; i++) {
+  for (unsigned i = 0; i < formatCount; i++) {
     if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
       surfaceFormat = formats[i];
       break;
@@ -310,8 +310,38 @@ void TestMain::createSwapchain()
   swapChainImageFormat = surfaceFormat.format;
 }
 
+void TestMain::createImageViews()
+{
+  VkResult res = VK_SUCCESS;
+  swapChainImageViews.resize(swapChainImages.size());
+
+  for (unsigned i = 0; i < swapChainImages.size(); i++) {
+    VkImageViewCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = swapChainImages[i];
+    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.format = swapChainImageFormat;
+    createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.baseMipLevel = 0;
+    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.layerCount = 1;
+
+    res = vkCreateImageView(device, &createInfo, VK_NULL_HANDLE, &swapChainImageViews[i]);
+    if (res != VK_SUCCESS)
+      throw std::runtime_error("Error creating image views");
+  }
+}
+
 void TestMain::cleanup()
 {
+  for (unsigned i = 0; i < swapChainImageViews.size(); i++)
+    vkDestroyImageView(device, swapChainImageViews[i], VK_NULL_HANDLE);
+
   vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
   vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
   vkDestroyDescriptorSetLayout(device, setLayout, VK_NULL_HANDLE);
@@ -334,6 +364,7 @@ void TestMain::init()
   createCommandBuffer();
   createPipelineLayout();
   createSwapchain();
+  createImageViews();
 }
 
 void TestMain::run()

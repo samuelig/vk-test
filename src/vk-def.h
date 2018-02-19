@@ -26,6 +26,7 @@ class TestMain {
   void     createCommandBuffer();
   void     createPipelineLayout();
   void     createSwapchain();
+  void     createImageViews();
 
   GLFWwindow       *window;
   VkSurfaceKHR     surface;
@@ -47,7 +48,9 @@ class TestMain {
   VkPipelineLayout      pipelineLayout;
 
   VkSwapchainKHR swapChain;
-  std::vector<VkImage> swapChainImages;
   VkFormat swapChainImageFormat;
   VkExtent2D swapChainExtent;
+  std::vector<VkImage> swapChainImages;
+  std::vector<VkImageView> swapChainImageViews;
+
 };
