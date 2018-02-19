@@ -13,18 +13,26 @@ class TestMain {
   TestMain() {};
   ~TestMain() {};
 
-  VkResult init();
+  void     init();
   void     cleanup();
   void     run();
 
  private:
   void     initWindow();
+  void     createInstance();
+  void     createDevice();
   void     createSurface();
+  void     getQueue();
+  void     createCommandBuffer();
+  void     createPipelineLayout();
 
   GLFWwindow       *window;
   VkSurfaceKHR     surface;
 
   VkInstance       instance;
+  std::vector<const char*> instanceExtensions;
+  std::vector<const char*> deviceExtensions;
+
   VkPhysicalDevice phyDevice;
   VkDevice         device;
 
