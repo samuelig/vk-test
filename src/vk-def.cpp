@@ -4,7 +4,6 @@
 #include "vk-def.h"
 #include "vk-util.h"
 
-
 void TestMain::initWindow()
 {
   glfwInit();
@@ -301,12 +300,12 @@ void TestMain::createSwapchain()
   createInfo.clipped = VK_TRUE;
   createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-  res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain);
+  res = vkCreateSwapchainKHR(device, &createInfo, VK_NULL_HANDLE, &swapChain);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error creating swapchain");
 
 
-  vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+  vkGetSwapchainImagesKHR(device, swapChain, &imageCount, VK_NULL_HANDLE);
   swapChainImages.resize(imageCount);
   vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
   swapChainImageFormat = surfaceFormat.format;
@@ -453,7 +452,7 @@ void TestMain::createPipeline()
   pipelineInfo.subpass = 0;
   pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-  res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline);
+  res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_NULL_HANDLE, &graphicsPipeline);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error when creating graphics pipeline");
 
@@ -493,7 +492,7 @@ void TestMain::createRenderPass()
   renderPassInfo.subpassCount = 1;
   renderPassInfo.pSubpasses = &subpass;
 
-  res = vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
+  res = vkCreateRenderPass(device, &renderPassInfo, VK_NULL_HANDLE, &renderPass);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error creating render pass");
 
@@ -519,7 +518,7 @@ void TestMain::createFramebuffer()
     framebufferInfo.height = swapChainExtent.height;
     framebufferInfo.layers = 1;
 
-    res = vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]);
+    res = vkCreateFramebuffer(device, &framebufferInfo, VK_NULL_HANDLE, &swapChainFramebuffers[i]);
     if (res != VK_SUCCESS)
       throw std::runtime_error("Error creating framebuffer!");
   }
