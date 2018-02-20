@@ -6,7 +6,7 @@
 #include <array>
 #include <glm/glm.hpp>
 
-#include "vk-def.h"
+#include "vk-test.h"
 #include "vk-util.h"
 
 #define DEBUG 1
@@ -49,7 +49,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT flags,
   return VK_FALSE;
 }
 
-bool TestMain::checkValidationLayerSupport()
+bool VulkanTest::checkValidationLayerSupport()
 {
   uint32_t layerCount;
   vkEnumerateInstanceLayerProperties(&layerCount, VK_NULL_HANDLE);
@@ -75,7 +75,7 @@ bool TestMain::checkValidationLayerSupport()
   return true;
 }
 
-void TestMain::setupDebugCallback()
+void VulkanTest::setupDebugCallback()
 {
   VkDebugReportCallbackCreateInfoEXT createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -87,7 +87,7 @@ void TestMain::setupDebugCallback()
   }
 }
 
-void TestMain::initWindow()
+void VulkanTest::initWindow()
 {
   glfwInit();
 
@@ -99,7 +99,7 @@ void TestMain::initWindow()
   window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL, NULL);
 }
 
-void TestMain::createInstance()
+void VulkanTest::createInstance()
 {
   VkResult res = VK_SUCCESS;
   VkApplicationInfo applicationInfo = {};
@@ -146,7 +146,7 @@ void TestMain::createInstance()
   printf("Instance created\n");
 }
 
-void TestMain::createDevice()
+void VulkanTest::createDevice()
 {
   VkResult res = VK_SUCCESS;
 
@@ -248,14 +248,14 @@ void TestMain::createDevice()
   printf("Created logical device\n");
 }
 
-void TestMain::getQueue()
+void VulkanTest::getQueue()
 {
   /* Get queue */
   vkGetDeviceQueue(device, queueGraphicsFamilyIndex, 0, &graphicsQueue);
   vkGetDeviceQueue(device, queuePresentationFamilyIndex, 0, &presentQueue);
 }
 
-void TestMain::createSurface()
+void VulkanTest::createSurface()
 {
   VkResult res = VK_SUCCESS;
   /* Create Surface */
@@ -265,7 +265,7 @@ void TestMain::createSurface()
     throw std::runtime_error("Error creating window surface");
 }
 
-void TestMain::createCommandBuffer()
+void VulkanTest::createCommandBuffer()
 {
   VkResult res = VK_SUCCESS;
   /* Create command buffer pool */
@@ -296,7 +296,7 @@ void TestMain::createCommandBuffer()
   printf("Created command buffers\n");
 }
 
-void TestMain::createPipelineLayout()
+void VulkanTest::createPipelineLayout()
 {
   /* Create Descriptor Set Layout */
   VkResult res = VK_SUCCESS;
@@ -330,7 +330,7 @@ void TestMain::createPipelineLayout()
   printf("Created pipeline layout\n");
 }
 
-void TestMain::createSwapchain()
+void VulkanTest::createSwapchain()
 {
   VkResult res = VK_SUCCESS;
   VkSurfaceCapabilitiesKHR capabilities;
@@ -423,7 +423,7 @@ void TestMain::createSwapchain()
   swapChainImageFormat = surfaceFormat.format;
 }
 
-void TestMain::createImageViews()
+void VulkanTest::createImageViews()
 {
   VkResult res = VK_SUCCESS;
   swapChainImageViews.resize(swapChainImages.size());
@@ -450,7 +450,7 @@ void TestMain::createImageViews()
   }
 }
 
-VkShaderModule TestMain::createShaderModule(const std::vector<char>& code) {
+VkShaderModule VulkanTest::createShaderModule(const std::vector<char>& code) {
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
@@ -465,7 +465,7 @@ VkShaderModule TestMain::createShaderModule(const std::vector<char>& code) {
         return shaderModule;
 }
 
-void TestMain::createPipeline()
+void VulkanTest::createPipeline()
 {
   VkResult res = VK_SUCCESS;
   auto vertShaderCode = readFile("src/shaders/vert.spv");
@@ -594,7 +594,7 @@ void TestMain::createPipeline()
   printf("Created pipeline\n");
 }
 
-void TestMain::createRenderPass()
+void VulkanTest::createRenderPass()
 {
   VkResult res = VK_SUCCESS;
 
@@ -631,7 +631,7 @@ void TestMain::createRenderPass()
   printf("Render pass created\n");
 }
 
-void TestMain::createFramebuffer()
+void VulkanTest::createFramebuffer()
 {
   VkResult res = VK_SUCCESS;
   swapChainFramebuffers.resize(swapChainImageViews.size());
@@ -656,7 +656,7 @@ void TestMain::createFramebuffer()
   }
 }
 
-void TestMain::createSemaphores()
+void VulkanTest::createSemaphores()
 {
   /* Create semaphores to know when an swapchain image is ready and when the rendering has finished */
   VkSemaphoreCreateInfo semaphoreInfo = {};
@@ -666,7 +666,7 @@ void TestMain::createSemaphores()
     throw std::runtime_error("Error creating semaphores");
 }
 
-void TestMain::drawFrame()
+void VulkanTest::drawFrame()
 {
   VkResult res = VK_SUCCESS;
   /* Acquire next image to draw into */
@@ -711,7 +711,7 @@ void TestMain::drawFrame()
   vkQueueWaitIdle(presentQueue);
 }
 
-void TestMain::recordCommandBuffers()
+void VulkanTest::recordCommandBuffers()
 {
   VkResult res = VK_SUCCESS;
   for (unsigned i = 0; i < swapChainFramebuffers.size(); i++) {
@@ -751,7 +751,7 @@ void TestMain::recordCommandBuffers()
   }
 }
 
-void TestMain::createVertexBuffer()
+void VulkanTest::createVertexBuffer()
 {
   VkResult res = VK_SUCCESS;
   VkBufferCreateInfo bufferInfo = {};
@@ -784,7 +784,7 @@ void TestMain::createVertexBuffer()
   vkUnmapMemory(device, vertexBufferMemory);
 }
 
-uint32_t TestMain::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+uint32_t VulkanTest::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
   VkPhysicalDeviceMemoryProperties memProperties;
   vkGetPhysicalDeviceMemoryProperties(phyDevice, &memProperties);
@@ -799,7 +799,7 @@ uint32_t TestMain::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags pro
   throw std::runtime_error("Error finding suitable memory type");
 }
 
-void TestMain::cleanup()
+void VulkanTest::cleanup()
 {
   vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
   vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
@@ -831,7 +831,7 @@ void TestMain::cleanup()
   printf("Cleaned up all\n");
 }
 
-void TestMain::init()
+void VulkanTest::init()
 {
   initWindow();
   createInstance();
@@ -850,7 +850,7 @@ void TestMain::init()
   createSemaphores();
 }
 
-void TestMain::run()
+void VulkanTest::run()
 {
   while (!glfwWindowShouldClose(window)) {
     drawFrame();

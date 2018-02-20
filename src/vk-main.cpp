@@ -1,10 +1,10 @@
 #include <stdio.h>
 
-#include "vk-def.h"
+#include "vk-test.h"
 
 int main (void)
 {
-  TestMain prog;
+  VulkanTest prog;
 
   prog.init();
 

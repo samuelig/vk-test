@@ -9,10 +9,10 @@
 const int WIDTH = 800;
 const int HEIGHT = 600;
 
-class TestMain {
+class VulkanTest {
  public:
-  TestMain() {};
-  ~TestMain() {};
+  VulkanTest() {};
+  ~VulkanTest() {};
 
   void     init();
   void     cleanup();
