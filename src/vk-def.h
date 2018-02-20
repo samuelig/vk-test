@@ -31,6 +31,12 @@ class TestMain {
   void     createPipeline();
   void     createRenderPass();
   void     createFramebuffer();
+  void     createSemaphores();
+
+  void     recordCommandBuffers();
+  void     drawFrame();
+  void     setupDebugCallback();
+  bool     checkValidationLayerSupport();
 
   VkShaderModule   createShaderModule(const std::vector<char>& code);
 
@@ -38,6 +44,7 @@ class TestMain {
   VkSurfaceKHR     surface;
 
   VkInstance       instance;
+  VkDebugReportCallbackEXT callback;
   std::vector<const char*> instanceExtensions;
   std::vector<const char*> deviceExtensions;
 
@@ -45,10 +52,12 @@ class TestMain {
   VkDevice         device;
 
   int              queueGraphicsFamilyIndex;
-  VkQueue          queue;
+  int              queuePresentationFamilyIndex;
+  VkQueue          graphicsQueue;
+  VkQueue          presentQueue;
 
-  VkCommandPool    cmdPool;
-  VkCommandBuffer  cmdBuffer;
+  VkCommandPool                 cmdPool;
+  std::vector<VkCommandBuffer>  commandBuffers;
 
   VkDescriptorSetLayout setLayout;
   VkPipelineLayout      pipelineLayout;
@@ -61,5 +70,8 @@ class TestMain {
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkFramebuffer> swapChainFramebuffers;
+
+  VkSemaphore imageAvailableSemaphore;
+  VkSemaphore renderFinishedSemaphore;
 
 };
