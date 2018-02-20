@@ -1,0 +1,2 @@
+2018-02-20 Samuel Iglesias Gonsálvez <correo@samuelig.es>
+	* vk-test.cpp: initializes Vulkan and paint a triangle on the screen.
