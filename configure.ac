@@ -23,7 +23,7 @@ fi
 
 AM_CONDITIONAL([DEBUG], [test "x$enable_debug" = "xyes"])
 
-PKG_CHECK_MODULES(PROG_DEPS, [vulkan glfw3])
+PKG_CHECK_MODULES(PROG_DEPS, [vulkan glfw3 glm])
 AC_SUBST(PROG_DEPS_CFLAGS)
 AC_SUBST(PROG_DEPS_LIBS)
 
