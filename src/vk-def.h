@@ -32,7 +32,9 @@ class TestMain {
   void     createRenderPass();
   void     createFramebuffer();
   void     createSemaphores();
+  void     createVertexBuffer();
 
+  uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
   void     recordCommandBuffers();
   void     drawFrame();
   void     setupDebugCallback();
@@ -64,14 +66,15 @@ class TestMain {
   VkPipeline            graphicsPipeline;
   VkRenderPass          renderPass;
 
-  VkSwapchainKHR swapChain;
-  VkFormat swapChainImageFormat;
-  VkExtent2D swapChainExtent;
+  VkSwapchainKHR        swapChain;
+  VkFormat              swapChainImageFormat;
+  VkExtent2D            swapChainExtent;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkFramebuffer> swapChainFramebuffers;
 
-  VkSemaphore imageAvailableSemaphore;
-  VkSemaphore renderFinishedSemaphore;
-
+  VkSemaphore    imageAvailableSemaphore;
+  VkSemaphore    renderFinishedSemaphore;
+  VkBuffer       vertexBuffer;
+  VkDeviceMemory vertexBufferMemory;
 };

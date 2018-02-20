@@ -3,6 +3,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <array>
+#include <glm/glm.hpp>
 
 #include "vk-def.h"
 #include "vk-util.h"
@@ -11,6 +13,17 @@
 
 std::vector<const char*> validationLayers = {
     "VK_LAYER_LUNARG_standard_validation"
+};
+
+struct Vertex {
+    glm::vec2 pos;
+    glm::vec3 color;
+};
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
@@ -70,7 +83,7 @@ void TestMain::setupDebugCallback()
   createInfo.pfnCallback = debugCallback;
 
   if (CreateDebugReportCallbackEXT(instance, &createInfo, VK_NULL_HANDLE, &callback) != VK_SUCCESS) {
-    throw std::runtime_error("failed to set up debug callback!");
+    throw std::runtime_error("Error setting up debug callback");
   }
 }
 
@@ -113,7 +126,7 @@ void TestMain::createInstance()
     validationLayers.clear();
 
   if (DEBUG && !checkValidationLayerSupport())
-    throw std::runtime_error("No validation layers\n");
+    throw std::runtime_error("No validation layers");
 
   VkInstanceCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -128,7 +141,7 @@ void TestMain::createInstance()
   /* Creating the instance */
   res = vkCreateInstance(&createInfo, VK_NULL_HANDLE, &instance);
   if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating the instance\n");
+    throw std::runtime_error("Error creating the instance");
 
   printf("Instance created\n");
 }
@@ -143,13 +156,13 @@ void TestMain::createDevice()
 
   res = vkEnumeratePhysicalDevices(instance, &count, VK_NULL_HANDLE);
   if (res != VK_SUCCESS)
-     throw std::runtime_error("Error enumerating devices\n");
+     throw std::runtime_error("Error enumerating devices");
 
   physicalDevices.resize(count);
 
   res = vkEnumeratePhysicalDevices(instance, &count, physicalDevices.data());
   if (res != VK_SUCCESS)
-    throw std::runtime_error( "Error enumerating devices\n");
+    throw std::runtime_error( "Error enumerating devices");
 
 #if 0
   /* Ask for device properties in order to choose one. */
@@ -169,7 +182,7 @@ void TestMain::createDevice()
 
   vkGetPhysicalDeviceQueueFamilyProperties(phyDevice, &count, VK_NULL_HANDLE);
   if (res != VK_SUCCESS)
-    throw std::runtime_error("Error getting device queue family properties\n");
+    throw std::runtime_error("Error getting device queue family properties");
 
   std::vector<VkQueueFamilyProperties> queueFamilyProperties;
   queueFamilyProperties.resize(count);
@@ -184,7 +197,7 @@ void TestMain::createDevice()
   }
 
   if (queueGraphicsFamilyIndex < 0)
-    throw std::runtime_error("Device doesn't have a graphics queue useful for us\n");
+    throw std::runtime_error("Device doesn't have a graphics queue useful for us");
 
   /* Presentation queue */
   queuePresentationFamilyIndex = -1;
@@ -196,7 +209,7 @@ void TestMain::createDevice()
   }
 
   if (queuePresentationFamilyIndex < 0)
-    throw std::runtime_error("Device doesn't have a presentation queue useful for us\n");
+    throw std::runtime_error("Device doesn't have a presentation queue useful for us");
 
   /* Create Logical Device */
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -230,7 +243,7 @@ void TestMain::createDevice()
 
   res = vkCreateDevice(phyDevice, &deviceCreateInfo, VK_NULL_HANDLE, &device);
   if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating device\n");
+    throw std::runtime_error("Error creating device");
 
   printf("Created logical device\n");
 }
@@ -249,7 +262,7 @@ void TestMain::createSurface()
   res = glfwCreateWindowSurface(instance, window, NULL, &surface);
 
   if (res != VK_SUCCESS)
-    throw std::runtime_error("failed to create window surface!");
+    throw std::runtime_error("Error creating window surface");
 }
 
 void TestMain::createCommandBuffer()
@@ -264,7 +277,7 @@ void TestMain::createCommandBuffer()
 
   res = vkCreateCommandPool(device, &cmdPoolInfo, VK_NULL_HANDLE, &cmdPool);
   if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating command pool\n");
+    throw std::runtime_error("Error creating command pool");
 
   /* Create command buffers */
   commandBuffers.resize(swapChainFramebuffers.size());
@@ -278,7 +291,7 @@ void TestMain::createCommandBuffer()
 
   res = vkAllocateCommandBuffers(device, &cmd, commandBuffers.data());
   if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating command buffer\n");
+    throw std::runtime_error("Error creating command buffer");
 
   printf("Created command buffers\n");
 }
@@ -359,7 +372,7 @@ void TestMain::createSwapchain()
 
   /* XXX: Implement a way of selecting a different format if this fails */
   if (surfaceFormat.format == VK_FORMAT_UNDEFINED)
-    throw std::runtime_error("VK_FORMAT_B8G8R8A8_UNORM is not supported\n");
+    throw std::runtime_error("VK_FORMAT_B8G8R8A8_UNORM is not supported");
 
 #if 0
   /* Get the presentation modes supported */
@@ -475,14 +488,33 @@ void TestMain::createPipeline()
 
   VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
+  /* Vertex input description */
+  VkVertexInputBindingDescription bindingDescription = {};
+  bindingDescription.binding = 0;
+  bindingDescription.stride = sizeof(Vertex);
+  bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+  std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+  attributeDescriptions[0].binding = 0;
+  attributeDescriptions[0].location = 0;
+  attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+  attributeDescriptions[0].offset = offsetof(Vertex, pos);
+  attributeDescriptions[1].binding = 0;
+  attributeDescriptions[1].location = 1;
+  attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attributeDescriptions[1].offset = offsetof(Vertex, color);
+
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = 0;
-  vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+  vertexInputInfo.vertexBindingDescriptionCount = 1;
+  vertexInputInfo.vertexAttributeDescriptionCount = (unsigned)attributeDescriptions.size();
+  vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+  vertexInputInfo.pVertexAttributeDescriptions = &attributeDescriptions[0];
 
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
   inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
   inputAssembly.primitiveRestartEnable = VK_FALSE;
 
   VkViewport viewport = {};
@@ -620,7 +652,7 @@ void TestMain::createFramebuffer()
 
     res = vkCreateFramebuffer(device, &framebufferInfo, VK_NULL_HANDLE, &swapChainFramebuffers[i]);
     if (res != VK_SUCCESS)
-      throw std::runtime_error("Error creating framebuffer!");
+      throw std::runtime_error("Error creating framebuffer");
   }
 }
 
@@ -631,7 +663,7 @@ void TestMain::createSemaphores()
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   if (vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &imageAvailableSemaphore) != VK_SUCCESS ||
       vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &renderFinishedSemaphore) != VK_SUCCESS)
-    throw std::runtime_error("Error creating semaphores!");
+    throw std::runtime_error("Error creating semaphores");
 }
 
 void TestMain::drawFrame()
@@ -660,7 +692,7 @@ void TestMain::drawFrame()
   /* Submit work to the queue */
   res = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
   if (res != VK_SUCCESS)
-    throw std::runtime_error("failed to submit draw command buffer!");
+    throw std::runtime_error("Error submitting draw command buffer");
 
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -705,21 +737,75 @@ void TestMain::recordCommandBuffers()
 
     vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    /* XXX: Change this draw call to the right one */
-    vkCmdDraw(commandBuffers[i], 1, 1, 0, 0);
+    VkBuffer vertexBuffers[] = {vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+    vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffers[i]);
 
     res = vkEndCommandBuffer(commandBuffers[i]);
     if (res != VK_SUCCESS)
-      throw std::runtime_error("failed to record command buffer!");
+      throw std::runtime_error("Error recording command buffer");
   }
+}
+
+void TestMain::createVertexBuffer()
+{
+  VkResult res = VK_SUCCESS;
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+  bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  res = vkCreateBuffer(device, &bufferInfo, VK_NULL_HANDLE, &vertexBuffer);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating vertex buffer");
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  res = vkAllocateMemory(device, &allocInfo, VK_NULL_HANDLE, &vertexBufferMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating vertex buffer memory");
+
+  vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+
+  void* data;
+  vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+  memcpy(data, vertices.data(), (size_t) bufferInfo.size);
+  vkUnmapMemory(device, vertexBufferMemory);
+}
+
+uint32_t TestMain::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vkGetPhysicalDeviceMemoryProperties(phyDevice, &memProperties);
+
+  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+    if ((typeFilter & (1 << i)) &&
+        (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+      return i;
+
+  }
+
+  throw std::runtime_error("Error finding suitable memory type");
 }
 
 void TestMain::cleanup()
 {
   vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
   vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
+
+  vkDestroyBuffer(device, vertexBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, vertexBufferMemory, VK_NULL_HANDLE);
 
   vkDestroyPipeline(device, graphicsPipeline, VK_NULL_HANDLE);
   vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
@@ -759,6 +845,7 @@ void TestMain::init()
   createFramebuffer();
   createCommandBuffer();
   createPipeline();
+  createVertexBuffer();
   recordCommandBuffers();
   createSemaphores();
 }
