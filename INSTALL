@@ -17,6 +17,10 @@ Basic Installation
   - glfw3
   - glm
 
+* Download submodules:
+  $ git submodule init
+  $ git submodule update
+
 * Compile:
 
   $ ./autogen.sh
