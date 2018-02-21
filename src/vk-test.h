@@ -33,6 +33,7 @@ class VulkanTest {
   void     createFramebuffer();
   void     createSemaphores();
   void     createVertexBuffer();
+  void     createIndexBuffer();
 
   uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
   void     recordCommandBuffers();
@@ -77,4 +78,6 @@ class VulkanTest {
   VkSemaphore    renderFinishedSemaphore;
   VkBuffer       vertexBuffer;
   VkDeviceMemory vertexBufferMemory;
+  VkBuffer       indexBuffer;
+  VkDeviceMemory indexBufferMemory;
 };

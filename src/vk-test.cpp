@@ -21,9 +21,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
@@ -374,21 +379,8 @@ void VulkanTest::createSwapchain()
   if (surfaceFormat.format == VK_FORMAT_UNDEFINED)
     throw std::runtime_error("VK_FORMAT_B8G8R8A8_UNORM is not supported");
 
-#if 0
-  /* Get the presentation modes supported */
-  uint32_t presentModeCount;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, VK_NULL_HANDLE);
-
-  if (presentModeCount != 0) {
-    presentModes.resize(presentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, presentModes.data());
-  }
-  /* XXX: Implement a way of selecting the presentation mode */
-  VkPresentModeKHR presentMode = presentModes[0];
-#else
   /* This presentation mode is always supported according to the spec */
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-#endif
 
   /* Select the extend to current window size */
   swapChainExtent = {WIDTH, HEIGHT};
@@ -664,6 +656,8 @@ void VulkanTest::createSemaphores()
   if (vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &imageAvailableSemaphore) != VK_SUCCESS ||
       vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &renderFinishedSemaphore) != VK_SUCCESS)
     throw std::runtime_error("Error creating semaphores");
+
+  printf("Created the semaphores used for getting swapchain images and know when it finished rendering\n");
 }
 
 void VulkanTest::drawFrame()
@@ -740,8 +734,9 @@ void VulkanTest::recordCommandBuffers()
     VkBuffer vertexBuffers[] = {vertexBuffer};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-    vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+    vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffers[i]);
 
@@ -749,6 +744,8 @@ void VulkanTest::recordCommandBuffers()
     if (res != VK_SUCCESS)
       throw std::runtime_error("Error recording command buffer");
   }
+
+  printf("Recorded command buffer commands\n");
 }
 
 void VulkanTest::createVertexBuffer()
@@ -782,6 +779,111 @@ void VulkanTest::createVertexBuffer()
   vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
   memcpy(data, vertices.data(), (size_t) bufferInfo.size);
   vkUnmapMemory(device, vertexBufferMemory);
+
+  printf("Created Vertex input buffer and filled it with data\n");
+}
+
+void VulkanTest::createIndexBuffer()
+{
+  VkResult res = VK_SUCCESS;
+
+  /* For testing, I am going to use a staging buffer, even when for Intel GPU
+   * it is not needed (the memory is shared between host and device). However
+   * I am following https://vulkan-tutorial.com/Vertex_buffers/Index_buffer
+   * tutorial and I want to learn how to do it for other GPUs.
+   */
+  VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+  VkBuffer stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+  VkBufferCreateInfo stagingBufferInfo = {};
+  stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  stagingBufferInfo.size = bufferSize;
+  stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  res = vkCreateBuffer(device, &stagingBufferInfo, VK_NULL_HANDLE, &stagingBuffer);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating staging buffer");
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(device, stagingBuffer, &memRequirements);
+
+  VkMemoryAllocateInfo allocStagingInfo = {};
+  allocStagingInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocStagingInfo.allocationSize = memRequirements.size;
+  allocStagingInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  res = vkAllocateMemory(device, &allocStagingInfo, VK_NULL_HANDLE, &stagingBufferMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating vertex buffer memory");
+
+  vkBindBufferMemory(device, stagingBuffer, stagingBufferMemory, 0);
+
+  void* data;
+  vkMapMemory(device, stagingBufferMemory, 0, stagingBufferInfo.size, 0, &data);
+  memcpy(data, indices.data(), (size_t) stagingBufferInfo.size);
+  vkUnmapMemory(device, stagingBufferMemory);
+
+  printf("Created staging buffer for indices and filled it with data\n");
+
+  /* Create index buffer in device memory */
+  VkBufferCreateInfo indexBufferInfo = {};
+  indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  indexBufferInfo.size = bufferSize;
+  indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  res = vkCreateBuffer(device, &indexBufferInfo, VK_NULL_HANDLE, &indexBuffer);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating index buffer");
+
+  vkGetBufferMemoryRequirements(device, indexBuffer, &memRequirements);
+
+  VkMemoryAllocateInfo allocIndexInfo = {};
+  allocIndexInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocIndexInfo.allocationSize = memRequirements.size;
+  allocIndexInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  res = vkAllocateMemory(device, &allocIndexInfo, VK_NULL_HANDLE, &indexBufferMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating vertex buffer memory");
+
+  vkBindBufferMemory(device, indexBuffer, indexBufferMemory, 0);
+
+  printf("Created index buffer device local memory\n");
+
+  /* Copy staging buffer contents (host visible memory to index buffer (device memory) */
+  VkCommandBufferAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandPool = cmdPool;
+  allocInfo.commandBufferCount = 1;
+
+  VkCommandBuffer commandBuffer;
+  vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.size = bufferSize;
+  vkCmdCopyBuffer(commandBuffer, stagingBuffer, indexBuffer, 1, &copyRegion);
+
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(graphicsQueue);
+  vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+
+  /* Destroy staging buffer, it is no longer used */
+  vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
 }
 
 uint32_t VulkanTest::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -804,6 +906,8 @@ void VulkanTest::cleanup()
   vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
   vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
 
+  vkDestroyBuffer(device, indexBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, indexBufferMemory, VK_NULL_HANDLE);
   vkDestroyBuffer(device, vertexBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, vertexBufferMemory, VK_NULL_HANDLE);
 
@@ -846,6 +950,7 @@ void VulkanTest::init()
   createCommandBuffer();
   createPipeline();
   createVertexBuffer();
+  createIndexBuffer();
   recordCommandBuffers();
   createSemaphores();
 }
