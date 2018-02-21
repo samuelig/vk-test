@@ -34,9 +34,13 @@ class VulkanTest {
   void     createSemaphores();
   void     createVertexBuffer();
   void     createIndexBuffer();
+  void     createUniformBuffer();
+  void     createDescriptorPool();
+  void     createDescriptorSet();
 
   uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
   void     recordCommandBuffers();
+  void     updateUniformBuffer();
   void     drawFrame();
   void     setupDebugCallback();
   bool     checkValidationLayerSupport();
@@ -74,10 +78,16 @@ class VulkanTest {
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkFramebuffer> swapChainFramebuffers;
 
-  VkSemaphore    imageAvailableSemaphore;
-  VkSemaphore    renderFinishedSemaphore;
-  VkBuffer       vertexBuffer;
-  VkDeviceMemory vertexBufferMemory;
-  VkBuffer       indexBuffer;
-  VkDeviceMemory indexBufferMemory;
+  VkSemaphore      imageAvailableSemaphore;
+  VkSemaphore      renderFinishedSemaphore;
+
+  VkBuffer         vertexBuffer;
+  VkDeviceMemory   vertexBufferMemory;
+  VkBuffer         indexBuffer;
+  VkDeviceMemory   indexBufferMemory;
+  VkBuffer         uniformBuffer;
+  VkDeviceMemory   uniformBufferMemory;
+
+  VkDescriptorPool descriptorPool;
+  VkDescriptorSet  descriptorSet;
 };

@@ -4,7 +4,12 @@
 #include <stdexcept>
 #include <algorithm>
 #include <array>
+
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+// For rotating MVP matrices
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
 
 #include "vk-test.h"
 #include "vk-util.h"
@@ -18,6 +23,12 @@ std::vector<const char*> validationLayers = {
 struct Vertex {
     glm::vec2 pos;
     glm::vec3 color;
+};
+
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
 };
 
 const std::vector<Vertex> vertices = {
@@ -305,18 +316,20 @@ void VulkanTest::createPipelineLayout()
 {
   /* Create Descriptor Set Layout */
   VkResult res = VK_SUCCESS;
-  // VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
-  // descriptorSetLayoutBinding.binding = 0;
-  // descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  // descriptorSetLayoutBinding.stageFlags = (VkShaderStageFlagBits)0;
-  // descriptorSetLayoutBinding.pImmutableSamplers = VK_NULL_HANDLE;
+  VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
+  descriptorSetLayoutBinding.binding = 0;
+  descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  /* Uniform buffer only used in vertex shader */
+  descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+  descriptorSetLayoutBinding.pImmutableSamplers = VK_NULL_HANDLE;
+  descriptorSetLayoutBinding.descriptorCount = 1;
 
   VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {};
   descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
   descriptorSetLayoutInfo.pNext = VK_NULL_HANDLE;
   descriptorSetLayoutInfo.flags = 0;
-  descriptorSetLayoutInfo.bindingCount = 0;
-  descriptorSetLayoutInfo.pBindings = VK_NULL_HANDLE;
+  descriptorSetLayoutInfo.bindingCount = 1;
+  descriptorSetLayoutInfo.pBindings = &descriptorSetLayoutBinding;
 
   res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, VK_NULL_HANDLE, &setLayout);
 
@@ -730,6 +743,7 @@ void VulkanTest::recordCommandBuffers()
     vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, VK_NULL_HANDLE);
 
     VkBuffer vertexBuffers[] = {vertexBuffer};
     VkDeviceSize offsets[] = {0};
@@ -886,6 +900,110 @@ void VulkanTest::createIndexBuffer()
   vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
 }
 
+void VulkanTest::createUniformBuffer()
+{
+  VkResult res = VK_SUCCESS;
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = sizeof(UniformBufferObject);
+  bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  res = vkCreateBuffer(device, &bufferInfo, VK_NULL_HANDLE, &uniformBuffer);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating vertex buffer");
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(device, uniformBuffer, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  res = vkAllocateMemory(device, &allocInfo, VK_NULL_HANDLE, &uniformBufferMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating uniform buffer memory");
+
+  vkBindBufferMemory(device, uniformBuffer, uniformBufferMemory, 0);
+  printf("Created Uniform buffer\n");
+}
+
+void VulkanTest::updateUniformBuffer()
+{
+  static auto startTime = std::chrono::high_resolution_clock::now();
+
+  auto currentTime = std::chrono::high_resolution_clock::now();
+  float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+  UniformBufferObject ubo = {};
+  ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
+  // XXX: If this is applied, then I need to change cull mode to back and front face to CCW.
+  //ubo.proj[1][1] *= -1;
+  void* data;
+  vkMapMemory(device, uniformBufferMemory, 0, sizeof(ubo), 0, &data);
+  memcpy(data, &ubo, sizeof(ubo));
+  vkUnmapMemory(device, uniformBufferMemory);
+}
+
+void VulkanTest::createDescriptorPool()
+{
+  VkResult res = VK_SUCCESS;
+
+  VkDescriptorPoolSize descriptorPoolSize = {};
+  descriptorPoolSize.descriptorCount = 1;
+  descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+  VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
+  descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  descriptorPoolCreateInfo.flags = 0; // VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  descriptorPoolCreateInfo.poolSizeCount = 1;
+  descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+  descriptorPoolCreateInfo.maxSets = 1;
+
+  res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, VK_NULL_HANDLE, &descriptorPool);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating descriptor pool");
+  printf("Created descriptor pool\n");
+}
+
+void VulkanTest::createDescriptorSet()
+{
+  VkResult res = VK_SUCCESS;
+
+  VkDescriptorSetLayout layouts[] = {setLayout};
+  VkDescriptorSetAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = descriptorPool;
+  allocInfo.descriptorSetCount = 1;
+  allocInfo.pSetLayouts = layouts;
+
+  res = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating descriptor set");
+
+  /* Once allocated, indicate it has a uniform buffer and bind it to the one
+   * we created before.
+   */
+  VkDescriptorBufferInfo bufferInfo = {};
+  bufferInfo.buffer = uniformBuffer;
+  bufferInfo.offset = 0;
+  bufferInfo.range = sizeof(UniformBufferObject);
+
+  VkWriteDescriptorSet descriptorWrite = {};
+  descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  descriptorWrite.dstSet = descriptorSet;
+  descriptorWrite.dstBinding = 0;
+  descriptorWrite.dstArrayElement = 0;
+  descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  descriptorWrite.descriptorCount = 1;
+  descriptorWrite.pBufferInfo = &bufferInfo;
+
+  vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, VK_NULL_HANDLE);
+  printf("Created descriptor set\n");
+}
+
 uint32_t VulkanTest::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
   VkPhysicalDeviceMemoryProperties memProperties;
@@ -906,6 +1024,10 @@ void VulkanTest::cleanup()
   vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
   vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
 
+  vkDestroyDescriptorPool(device, descriptorPool, VK_NULL_HANDLE);
+
+  vkDestroyBuffer(device, uniformBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, uniformBufferMemory, VK_NULL_HANDLE);
   vkDestroyBuffer(device, indexBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, indexBufferMemory, VK_NULL_HANDLE);
   vkDestroyBuffer(device, vertexBuffer, VK_NULL_HANDLE);
@@ -951,6 +1073,9 @@ void VulkanTest::init()
   createPipeline();
   createVertexBuffer();
   createIndexBuffer();
+  createUniformBuffer();
+  createDescriptorPool();
+  createDescriptorSet();
   recordCommandBuffers();
   createSemaphores();
 }
@@ -958,6 +1083,7 @@ void VulkanTest::init()
 void VulkanTest::run()
 {
   while (!glfwWindowShouldClose(window)) {
+    updateUniformBuffer();
     drawFrame();
     glfwPollEvents();
   }
