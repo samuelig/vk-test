@@ -14,8 +14,6 @@
 #include "vk-test.h"
 #include "vk-util.h"
 
-#define DEBUG 1
-
 std::vector<const char*> validationLayers = {
     "VK_LAYER_LUNARG_standard_validation"
 };
@@ -136,12 +134,12 @@ void VulkanTest::createInstance()
     printf("\t%s\n", instanceExtensionsGLFW[i]);
   }
 
-  if (DEBUG)
+  if (ENABLE_DEBUG)
     instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
   else
     validationLayers.clear();
 
-  if (DEBUG && !checkValidationLayerSupport())
+  if (ENABLE_DEBUG && !checkValidationLayerSupport())
     throw std::runtime_error("No validation layers");
 
   VkInstanceCreateInfo createInfo = {};
@@ -1060,7 +1058,8 @@ void VulkanTest::init()
 {
   initWindow();
   createInstance();
-  setupDebugCallback();
+  if (ENABLE_DEBUG)
+    setupDebugCallback();
   createSurface();
   createDevice();
   getQueue();
