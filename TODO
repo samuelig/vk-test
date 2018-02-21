@@ -1,0 +1,13 @@
+TO-DO list
+---
+
+- Features:
+  * Add .obj model import function.
+  * Implement mouse/keyboard input management.
+  * Add texture usage.
+  * Add light model.
+
+- Improvements:
+
+  * Store multiple buffers in a single VkBuffer object -> https://developer.nvidia.com/vulkan-memory-management
+  * Refactor code.
