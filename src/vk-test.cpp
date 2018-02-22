@@ -11,6 +11,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include "vk-test.h"
 #include "vk-util.h"
 
@@ -760,38 +763,54 @@ void VulkanTest::recordCommandBuffers()
   printf("Recorded command buffer commands\n");
 }
 
-void VulkanTest::createVertexBuffer()
+void VulkanTest::createBuffer(VkDeviceSize bufferSize, unsigned bufferUsage, unsigned memoryProperties,
+                              VkBuffer &buffer, VkDeviceMemory &bufferMemory)
 {
   VkResult res = VK_SUCCESS;
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-  bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+  bufferInfo.size = bufferSize;
+  bufferInfo.usage = bufferUsage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  res = vkCreateBuffer(device, &bufferInfo, VK_NULL_HANDLE, &vertexBuffer);
+  res = vkCreateBuffer(device, &bufferInfo, VK_NULL_HANDLE, &buffer);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error creating vertex buffer");
 
   VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+  vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
 
   VkMemoryAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, memoryProperties);
 
-  res = vkAllocateMemory(device, &allocInfo, VK_NULL_HANDLE, &vertexBufferMemory);
+  res = vkAllocateMemory(device, &allocInfo, VK_NULL_HANDLE, &bufferMemory);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error allocating vertex buffer memory");
 
-  vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+  vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
 
-  void* data;
-  vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-  memcpy(data, vertices.data(), (size_t) bufferInfo.size);
-  vkUnmapMemory(device, vertexBufferMemory);
+void VulkanTest::fillBuffer(VkDeviceMemory bufferMemory, VkDeviceSize size, const void *data)
+{
+  void* dataBuffer;
+  vkMapMemory(device, bufferMemory, 0, size, 0, &dataBuffer);
+  memcpy(dataBuffer, data, (size_t) size);
+  vkUnmapMemory(device, bufferMemory);
+}
 
+void VulkanTest::createVertexBuffer()
+{
+  VkResult res = VK_SUCCESS;
+  VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+  createBuffer(bufferSize,
+               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+               vertexBuffer, vertexBufferMemory);
+
+  fillBuffer(vertexBufferMemory, bufferSize, vertices.data());
   printf("Created Vertex input buffer and filled it with data\n");
 }
 
@@ -805,60 +824,24 @@ void VulkanTest::createIndexBuffer()
    * tutorial and I want to learn how to do it for other GPUs.
    */
   VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
   VkBuffer stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
-  VkBufferCreateInfo stagingBufferInfo = {};
-  stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  stagingBufferInfo.size = bufferSize;
-  stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  res = vkCreateBuffer(device, &stagingBufferInfo, VK_NULL_HANDLE, &stagingBuffer);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating staging buffer");
 
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(device, stagingBuffer, &memRequirements);
+  createBuffer(bufferSize,
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+               stagingBuffer, stagingBufferMemory);
 
-  VkMemoryAllocateInfo allocStagingInfo = {};
-  allocStagingInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocStagingInfo.allocationSize = memRequirements.size;
-  allocStagingInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-  res = vkAllocateMemory(device, &allocStagingInfo, VK_NULL_HANDLE, &stagingBufferMemory);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error allocating vertex buffer memory");
-
-  vkBindBufferMemory(device, stagingBuffer, stagingBufferMemory, 0);
-
-  void* data;
-  vkMapMemory(device, stagingBufferMemory, 0, stagingBufferInfo.size, 0, &data);
-  memcpy(data, indices.data(), (size_t) stagingBufferInfo.size);
-  vkUnmapMemory(device, stagingBufferMemory);
+  fillBuffer(stagingBufferMemory, bufferSize, indices.data());
 
   printf("Created staging buffer for indices and filled it with data\n");
 
   /* Create index buffer in device memory */
-  VkBufferCreateInfo indexBufferInfo = {};
-  indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  indexBufferInfo.size = bufferSize;
-  indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-  indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  res = vkCreateBuffer(device, &indexBufferInfo, VK_NULL_HANDLE, &indexBuffer);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating index buffer");
-
-  vkGetBufferMemoryRequirements(device, indexBuffer, &memRequirements);
-
-  VkMemoryAllocateInfo allocIndexInfo = {};
-  allocIndexInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocIndexInfo.allocationSize = memRequirements.size;
-  allocIndexInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-  res = vkAllocateMemory(device, &allocIndexInfo, VK_NULL_HANDLE, &indexBufferMemory);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error allocating vertex buffer memory");
-
-  vkBindBufferMemory(device, indexBuffer, indexBufferMemory, 0);
+  createBuffer(bufferSize,
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+               indexBuffer, indexBufferMemory);
 
   printf("Created index buffer device local memory\n");
 
@@ -893,6 +876,8 @@ void VulkanTest::createIndexBuffer()
   vkQueueWaitIdle(graphicsQueue);
   vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
 
+  printf("Transfer data from staging buffer to index buffer done\n");
+
   /* Destroy staging buffer, it is no longer used */
   vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
@@ -901,29 +886,12 @@ void VulkanTest::createIndexBuffer()
 void VulkanTest::createUniformBuffer()
 {
   VkResult res = VK_SUCCESS;
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = sizeof(UniformBufferObject);
-  bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  res = vkCreateBuffer(device, &bufferInfo, VK_NULL_HANDLE, &uniformBuffer);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error creating vertex buffer");
-
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(device, uniformBuffer, &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-  res = vkAllocateMemory(device, &allocInfo, VK_NULL_HANDLE, &uniformBufferMemory);
-  if (res != VK_SUCCESS)
-    throw std::runtime_error("Error allocating uniform buffer memory");
-
-  vkBindBufferMemory(device, uniformBuffer, uniformBufferMemory, 0);
+  VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+  createBuffer(bufferSize,
+               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+               uniformBuffer, uniformBufferMemory);
   printf("Created Uniform buffer\n");
 }
 
@@ -938,10 +906,7 @@ void VulkanTest::updateUniformBuffer()
   ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
 
-  void* data;
-  vkMapMemory(device, uniformBufferMemory, 0, sizeof(ubo), 0, &data);
-  memcpy(data, &ubo, sizeof(ubo));
-  vkUnmapMemory(device, uniformBufferMemory);
+  fillBuffer(uniformBufferMemory, sizeof(ubo), &ubo);
 }
 
 void VulkanTest::createDescriptorPool()

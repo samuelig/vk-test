@@ -19,6 +19,8 @@ class VulkanTest {
   void     run();
 
  private:
+
+  /* Functions to prepare rendering */
   void     initWindow();
   void     createInstance();
   void     createDevice();
@@ -37,16 +39,20 @@ class VulkanTest {
   void     createUniformBuffer();
   void     createDescriptorPool();
   void     createDescriptorSet();
-
-  uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
   void     recordCommandBuffers();
   void     updateUniformBuffer();
   void     drawFrame();
+
+  /* Auxiliary functions */
+  uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
   void     setupDebugCallback();
   bool     checkValidationLayerSupport();
-
+  void     createBuffer(VkDeviceSize bufferSize, unsigned bufferUsage, unsigned memoryProperties,
+                        VkBuffer &buffer, VkDeviceMemory &bufferMemory);
+  void     fillBuffer(VkDeviceMemory bufferMemory, VkDeviceSize size, const void *data);
   VkShaderModule   createShaderModule(const std::vector<char>& code);
 
+  /* Class members */
   GLFWwindow       *window;
   VkSurfaceKHR     surface;
 
