@@ -37,6 +37,7 @@ class VulkanTest {
   void     createVertexBuffer();
   void     createIndexBuffer();
   void     createUniformBuffer();
+  void     createTextureImage();
   void     createDescriptorPool();
   void     createDescriptorSet();
   void     recordCommandBuffers();
@@ -96,4 +97,7 @@ class VulkanTest {
 
   VkDescriptorPool descriptorPool;
   VkDescriptorSet  descriptorSet;
+
+  VkImage          textureImage;
+  VkDeviceMemory   textureImageMemory;
 };

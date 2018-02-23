@@ -232,15 +232,17 @@ void VulkanTest::createDevice()
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
   std::vector<int> uniqueQueueFamilies;
   uniqueQueueFamilies.push_back(queueGraphicsFamilyIndex);
-  uniqueQueueFamilies.push_back(queuePresentationFamilyIndex);
+  if (queuePresentationFamilyIndex != queueGraphicsFamilyIndex)
+    uniqueQueueFamilies.push_back(queuePresentationFamilyIndex);
   for (unsigned i = 0; i < uniqueQueueFamilies.size(); i++) {
+    float queuePriorities [] = { 0 };
     VkDeviceQueueCreateInfo queueCreateInfo = {};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     queueCreateInfo.pNext = VK_NULL_HANDLE;
     queueCreateInfo.flags = 0;
     queueCreateInfo.queueFamilyIndex = (unsigned)uniqueQueueFamilies[i];
     queueCreateInfo.queueCount = 1;
-    queueCreateInfo.pQueuePriorities = VK_NULL_HANDLE;
+    queueCreateInfo.pQueuePriorities = &queuePriorities[0];
     queueCreateInfos.push_back(queueCreateInfo);
   }
 
@@ -817,14 +819,13 @@ void VulkanTest::createVertexBuffer()
 void VulkanTest::createIndexBuffer()
 {
   VkResult res = VK_SUCCESS;
+  VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
   /* For testing, I am going to use a staging buffer, even when for Intel GPU
    * it is not needed (the memory is shared between host and device). However
    * I am following https://vulkan-tutorial.com/Vertex_buffers/Index_buffer
    * tutorial and I want to learn how to do it for other GPUs.
    */
-  VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
   VkBuffer stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
 
@@ -886,7 +887,6 @@ void VulkanTest::createIndexBuffer()
 void VulkanTest::createUniformBuffer()
 {
   VkResult res = VK_SUCCESS;
-
   VkDeviceSize bufferSize = sizeof(UniformBufferObject);
   createBuffer(bufferSize,
                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -898,14 +898,12 @@ void VulkanTest::createUniformBuffer()
 void VulkanTest::updateUniformBuffer()
 {
   static auto startTime = std::chrono::high_resolution_clock::now();
-
   auto currentTime = std::chrono::high_resolution_clock::now();
   float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
   UniformBufferObject ubo = {};
   ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
   ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
-
   fillBuffer(uniformBufferMemory, sizeof(ubo), &ubo);
 }
 
@@ -981,12 +979,177 @@ uint32_t VulkanTest::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags p
   throw std::runtime_error("Error finding suitable memory type");
 }
 
+void VulkanTest::createTextureImage()
+{
+  VkResult res = VK_SUCCESS;
+  int texWidth, texHeight, texChannels;
+  stbi_uc* pixels = stbi_load("src/textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+  VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+  if (!pixels)
+    throw std::runtime_error("Error loading texture image");
+
+  /* Upload the read data into a staging buffer, we will copy it to a image later. */
+  VkBuffer stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+
+  createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+               stagingBuffer, stagingBufferMemory);
+  fillBuffer(stagingBufferMemory, imageSize, pixels);
+  stbi_image_free(pixels);
+
+  printf("Created buffer to copy the read pixels from texture.jpg to\n");
+
+  /* Create the image to copy the data to */
+  VkImageCreateInfo imageInfo = {};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = static_cast<uint32_t>(texWidth);
+  imageInfo.extent.height = static_cast<uint32_t>(texHeight);
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.flags = 0; // Optional
+
+  res = vkCreateImage(device, &imageInfo, VK_NULL_HANDLE, &textureImage);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating image");
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, textureImage, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  res = vkAllocateMemory(device, &allocInfo, nullptr, &textureImageMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating image memory!");
+
+  vkBindImageMemory(device, textureImage, textureImageMemory, 0);
+
+  printf("Created image\n");
+
+  /* Copy the data */
+  VkCommandBufferAllocateInfo allocCmdInfo = {};
+  allocCmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocCmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocCmdInfo.commandPool = cmdPool;
+  allocCmdInfo.commandBufferCount = 1;
+
+  VkCommandBuffer commandBuffer;
+  vkAllocateCommandBuffers(device, &allocCmdInfo, &commandBuffer);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+  /* Change layout */
+  VkImageMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = textureImage;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = 0;
+  barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    0,
+    0, VK_NULL_HANDLE,
+    0, VK_NULL_HANDLE,
+    1, &barrier);
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+
+  region.imageOffset = {0, 0, 0};
+  region.imageExtent = {
+    static_cast<uint32_t>(texWidth),
+    static_cast<uint32_t>(texHeight),
+    1
+  };
+
+  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, textureImage,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         1, &region);
+
+  /* Change layout */
+  VkImageMemoryBarrier barrierPost = {};
+  barrierPost.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrierPost.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrierPost.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrierPost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrierPost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrierPost.image = textureImage;
+  barrierPost.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrierPost.subresourceRange.baseMipLevel = 0;
+  barrierPost.subresourceRange.levelCount = 1;
+  barrierPost.subresourceRange.baseArrayLayer = 0;
+  barrierPost.subresourceRange.layerCount = 1;
+  barrierPost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  barrierPost.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    0,
+    0, VK_NULL_HANDLE,
+    0, VK_NULL_HANDLE,
+    1, &barrierPost);
+
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(graphicsQueue);
+
+  vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+
+  vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
+
+  printf("Copied the pixels in the buffer to the image\n");
+}
+
 void VulkanTest::cleanup()
 {
   vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
   vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
 
   vkDestroyDescriptorPool(device, descriptorPool, VK_NULL_HANDLE);
+
+  vkDestroyImage(device, textureImage, VK_NULL_HANDLE);
+  vkFreeMemory(device, textureImageMemory, VK_NULL_HANDLE);
 
   vkDestroyBuffer(device, uniformBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, uniformBufferMemory, VK_NULL_HANDLE);
@@ -1037,6 +1200,7 @@ void VulkanTest::init()
   createVertexBuffer();
   createIndexBuffer();
   createUniformBuffer();
+  createTextureImage();
   createDescriptorPool();
   createDescriptorSet();
   recordCommandBuffers();
