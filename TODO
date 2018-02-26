@@ -4,7 +4,6 @@ TO-DO list
 - Features:
   * Add .obj model import function.
   * Implement mouse/keyboard input management.
-  * Add texture usage.
   * Add light model.
 
 - Improvements:

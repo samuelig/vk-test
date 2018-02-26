@@ -38,6 +38,8 @@ class VulkanTest {
   void     createIndexBuffer();
   void     createUniformBuffer();
   void     createTextureImage();
+  void     createTextureImageView();
+  void     createTextureSampler();
   void     createDescriptorPool();
   void     createDescriptorSet();
   void     recordCommandBuffers();
@@ -100,4 +102,6 @@ class VulkanTest {
 
   VkImage          textureImage;
   VkDeviceMemory   textureImageMemory;
+  VkImageView      textureImageView;
+  VkSampler        textureSampler;
 };
