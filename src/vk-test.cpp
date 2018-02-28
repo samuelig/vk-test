@@ -876,6 +876,37 @@ void VulkanTest::createIndexBuffer()
   printf("Created index buffer device local memory\n");
 
   /* Copy staging buffer contents (host visible memory to index buffer (device memory) */
+  VkCommandBuffer commandBuffer = beginCommandBuffer();
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.size = bufferSize;
+  vkCmdCopyBuffer(commandBuffer, stagingBuffer, indexBuffer, 1, &copyRegion);
+
+  endCommandBufferAndSubmit(commandBuffer);
+
+  printf("Transfer data from staging buffer to index buffer done\n");
+
+  /* Destroy staging buffer, it is no longer used */
+  vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
+  vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
+}
+
+void VulkanTest::endCommandBufferAndSubmit(VkCommandBuffer commandBuffer)
+{
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(graphicsQueue);
+  vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+}
+
+VkCommandBuffer VulkanTest::beginCommandBuffer()
+{
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -891,26 +922,7 @@ void VulkanTest::createIndexBuffer()
 
   vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-  VkBufferCopy copyRegion = {};
-  copyRegion.size = bufferSize;
-  vkCmdCopyBuffer(commandBuffer, stagingBuffer, indexBuffer, 1, &copyRegion);
-
-  vkEndCommandBuffer(commandBuffer);
-
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-
-  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(graphicsQueue);
-  vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
-
-  printf("Transfer data from staging buffer to index buffer done\n");
-
-  /* Destroy staging buffer, it is no longer used */
-  vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
-  vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);
+  return commandBuffer;
 }
 
 void VulkanTest::createUniformBuffer()
@@ -1091,14 +1103,7 @@ void VulkanTest::createTextureImage()
   allocCmdInfo.commandPool = cmdPool;
   allocCmdInfo.commandBufferCount = 1;
 
-  VkCommandBuffer commandBuffer;
-  vkAllocateCommandBuffers(device, &allocCmdInfo, &commandBuffer);
-
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+  VkCommandBuffer commandBuffer = beginCommandBuffer();
 
   /* Change layout */
   VkImageMemoryBarrier barrier = {};
@@ -1169,17 +1174,7 @@ void VulkanTest::createTextureImage()
     0, VK_NULL_HANDLE,
     1, &barrierPost);
 
-  vkEndCommandBuffer(commandBuffer);
-
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-
-  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(graphicsQueue);
-
-  vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+  endCommandBufferAndSubmit(commandBuffer);
 
   vkDestroyBuffer(device, stagingBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, stagingBufferMemory, VK_NULL_HANDLE);

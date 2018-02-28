@@ -54,6 +54,8 @@ class VulkanTest {
                         VkBuffer &buffer, VkDeviceMemory &bufferMemory);
   void     fillBuffer(VkDeviceMemory bufferMemory, VkDeviceSize size, const void *data);
   VkShaderModule   createShaderModule(const std::vector<char>& code);
+  VkCommandBuffer  beginCommandBuffer();
+  void             endCommandBufferAndSubmit(VkCommandBuffer commandBuffer);
 
   /* Class members */
   GLFWwindow       *window;
