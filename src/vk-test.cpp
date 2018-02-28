@@ -6,6 +6,7 @@
 #include <array>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE // Vulkan's depth range from 0 to 1
 #include <glm/glm.hpp>
 // For rotating MVP matrices
 #include <glm/gtc/matrix_transform.hpp>
@@ -22,7 +23,7 @@ std::vector<const char*> validationLayers = {
 };
 
 struct Vertex {
-  glm::vec2 pos;
+  glm::vec3 pos;
   glm::vec3 color;
   glm::vec2 texCoord;
 };
@@ -34,14 +35,20 @@ struct UniformBufferObject {
 };
 
 const std::vector<Vertex> vertices = {
-  {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-  {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-  {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-  {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4
 };
 
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
@@ -530,7 +537,7 @@ void VulkanTest::createPipeline()
   std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
   attributeDescriptions[0].binding = 0;
   attributeDescriptions[0].location = 0;
-  attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+  attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
   attributeDescriptions[0].offset = offsetof(Vertex, pos);
   attributeDescriptions[1].binding = 0;
   attributeDescriptions[1].location = 1;
@@ -942,8 +949,8 @@ void VulkanTest::updateUniformBuffer()
   auto currentTime = std::chrono::high_resolution_clock::now();
   float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
   UniformBufferObject ubo = {};
-  ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+  ubo.model = glm::mat4(1.0); //glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
   fillBuffer(uniformBufferMemory, sizeof(ubo), &ubo);
 }
@@ -1227,6 +1234,95 @@ void VulkanTest::createTextureSampler()
         throw std::runtime_error("Error creating texture sampler");
 
   printf("Created Texture Sampler\n");
+}
+
+void VulkanTest::createDepthResources()
+{
+  VkResult res = VK_SUCCESS;
+  VkFormat depthFormat = findDepthFormat();
+
+  VkImageCreateInfo imageInfo = {};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = swapChainExtent.width;
+  imageInfo.extent.height = swapChainExtent.height;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = depthFormat;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.flags = 0; // Optional
+
+  res = vkCreateImage(device, &imageInfo, VK_NULL_HANDLE, &textureImage);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating image");
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, textureImage, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  res = vkAllocateMemory(device, &allocInfo, nullptr, &textureImageMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating image memory!");
+
+  vkBindImageMemory(device, depthImage, depthImageMemory, 0);
+
+  VkImageViewCreateInfo createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  createInfo.image = depthImage;
+  createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  createInfo.format = depthFormat;
+  createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  createInfo.subresourceRange.baseMipLevel = 0;
+  createInfo.subresourceRange.levelCount = 1;
+  createInfo.subresourceRange.baseArrayLayer = 0;
+  createInfo.subresourceRange.layerCount = 1;
+
+  res = vkCreateImageView(device, &createInfo, VK_NULL_HANDLE, &depthImageView);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating depth image view");
+}
+
+VkFormat VulkanTest::findDepthFormat()
+{
+  return
+    findSupportedFormat({VK_FORMAT_D32_SFLOAT,
+          VK_FORMAT_D32_SFLOAT_S8_UINT,
+          VK_FORMAT_D24_UNORM_S8_UINT},
+      VK_IMAGE_TILING_OPTIMAL,
+      VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+}
+
+bool VulkanTest::hasStencilComponent(VkFormat format)
+{
+  return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+}
+
+VkFormat VulkanTest::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+  for (VkFormat format : candidates) {
+    VkFormatProperties props;
+    vkGetPhysicalDeviceFormatProperties(phyDevice, format, &props);
+
+    if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+      return format;
+    } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+      return format;
+    }
+  }
+
+  throw std::runtime_error("Error finding supported format!");
 }
 
 void VulkanTest::cleanup()

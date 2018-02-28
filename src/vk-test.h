@@ -40,6 +40,7 @@ class VulkanTest {
   void     createTextureImage();
   void     createTextureImageView();
   void     createTextureSampler();
+  void     createDepthResources();
   void     createDescriptorPool();
   void     createDescriptorSet();
   void     recordCommandBuffers();
@@ -56,6 +57,9 @@ class VulkanTest {
   VkShaderModule   createShaderModule(const std::vector<char>& code);
   VkCommandBuffer  beginCommandBuffer();
   void             endCommandBufferAndSubmit(VkCommandBuffer commandBuffer);
+  VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+  VkFormat findDepthFormat();
+  bool     hasStencilComponent(VkFormat format);
 
   /* Class members */
   GLFWwindow       *window;
@@ -106,4 +110,8 @@ class VulkanTest {
   VkDeviceMemory   textureImageMemory;
   VkImageView      textureImageView;
   VkSampler        textureSampler;
+
+  VkImage          depthImage;
+  VkDeviceMemory   depthImageMemory;
+  VkImageView      depthImageView;
 };
