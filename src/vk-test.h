@@ -27,6 +27,7 @@ class VulkanTest {
   void     createSurface();
   void     getQueue();
   void     createCommandBuffer();
+  void     createCommandPool();
   void     createPipelineLayout();
   void     createSwapchain();
   void     createImageViews();
