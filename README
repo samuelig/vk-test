@@ -1,1 +1,12 @@
 This is a Vulkan test program to learn the API.
+
+Dependencies
+---
+
+* Vulkan headers and library
+* GLFW3
+* GLM
+* stb (downloaded via git submodule)
+
+$ sudo apt install libvulkan-dev libglfw3-dev libglm-dev
+$ git submodule init && git submodule update
