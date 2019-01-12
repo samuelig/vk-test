@@ -118,8 +118,8 @@ void VulkanTest::initWindow()
 
   /* No need to create a context because I am not going to share it with OpenGL */
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  /* Window is not resizable */
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+  /* Window is resizable */
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
   window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL, NULL);
 }
@@ -387,8 +387,46 @@ void VulkanTest::createPipelineLayout()
   printf("Created pipeline layout\n");
 }
 
+void VulkanTest::recreateSwapchain()
+{
+  destroySwapchain();
+  createSwapchain();
+  createImageViews();
+  createRenderPass();
+  createDepthResources();
+  createFramebuffer();
+  createPipeline();
+  createCommandBuffer();
+  recordCommandBuffers();
+}
+
+void VulkanTest::destroySwapchain()
+{
+  vkFreeCommandBuffers(device, cmdPool, commandBuffers.size(), &commandBuffers[0]);
+  vkDestroyPipeline(device, graphicsPipeline, VK_NULL_HANDLE);
+  vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
+  vkDestroyDescriptorSetLayout(device, setLayout, VK_NULL_HANDLE);
+
+  vkDestroyRenderPass(device, renderPass, VK_NULL_HANDLE);
+
+  for (unsigned i = 0; i < swapChainFramebuffers.size(); i++)
+    vkDestroyFramebuffer(device, swapChainFramebuffers[i], VK_NULL_HANDLE);
+
+  for (unsigned i = 0; i < swapChainImageViews.size(); i++)
+    vkDestroyImageView(device, swapChainImageViews[i], VK_NULL_HANDLE);
+
+  vkDestroyImageView(device, depthImageView, VK_NULL_HANDLE);
+  vkDestroyImage(device, depthImage, VK_NULL_HANDLE);
+
+  vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
+}
+
 void VulkanTest::createSwapchain()
 {
+  unsigned width, height;
+
+  glfwGetFramebufferSize(window, (int *)&width, (int *)&height);
+
   VkResult res = VK_SUCCESS;
   VkSurfaceCapabilitiesKHR capabilities;
   std::vector<VkSurfaceFormatKHR> formats;
@@ -435,7 +473,7 @@ void VulkanTest::createSwapchain()
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
 
   /* Select the extend to current window size */
-  swapChainExtent = {WIDTH, HEIGHT};
+  swapChainExtent = {width, height};
 
   unsigned imageCount = (capabilities.minImageCount >= 2) ?
     capabilities.minImageCount : capabilities.minImageCount + 1;
@@ -752,7 +790,16 @@ void VulkanTest::drawFrame()
   VkResult res = VK_SUCCESS;
   /* Acquire next image to draw into */
   uint32_t imageIndex;
-  vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+  res = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+  if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+    recreateSwapchain();
+    return;
+  } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+    throw std::runtime_error("failed to acquire swap chain image!");
+  }
+
+  updateUniformBuffer();
 
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1413,23 +1460,9 @@ void VulkanTest::cleanup()
   vkDestroyBuffer(device, vertexBuffer, VK_NULL_HANDLE);
   vkFreeMemory(device, vertexBufferMemory, VK_NULL_HANDLE);
 
-  vkDestroyPipeline(device, graphicsPipeline, VK_NULL_HANDLE);
-  vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
-
-  vkDestroyDescriptorSetLayout(device, setLayout, VK_NULL_HANDLE);
+  destroySwapchain();
   vkDestroyCommandPool(device, cmdPool, VK_NULL_HANDLE);
 
-  for (unsigned i = 0; i < swapChainFramebuffers.size(); i++)
-    vkDestroyFramebuffer(device, swapChainFramebuffers[i], VK_NULL_HANDLE);
-
-  vkDestroyRenderPass(device, renderPass, VK_NULL_HANDLE);
-
-  for (unsigned i = 0; i < swapChainImageViews.size(); i++)
-    vkDestroyImageView(device, swapChainImageViews[i], VK_NULL_HANDLE);
-
-  vkDestroyImageView(device, depthImageView, VK_NULL_HANDLE);
-
-  vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
   vkDestroyDevice(device, VK_NULL_HANDLE);
   DestroyDebugReportCallbackEXT(instance, callback, VK_NULL_HANDLE);
   vkDestroyInstance(instance, VK_NULL_HANDLE);
@@ -1471,9 +1504,8 @@ void VulkanTest::init()
 void VulkanTest::run()
 {
   while (!glfwWindowShouldClose(window)) {
-    updateUniformBuffer();
-    drawFrame();
     glfwPollEvents();
+    drawFrame();
   }
 
   /* Wait for device finishes what it is doing */

@@ -30,6 +30,8 @@ class VulkanTest {
   void     createCommandPool();
   void     createPipelineLayout();
   void     createSwapchain();
+  void     recreateSwapchain();
+  void     destroySwapchain();
   void     createImageViews();
   void     createPipeline();
   void     createRenderPass();
