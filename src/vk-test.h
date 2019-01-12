@@ -26,13 +26,13 @@ class VulkanTest {
   void     createDevice();
   void     createSurface();
   void     getQueue();
-  void     createCommandBuffer();
+  void     createCommandBuffers();
   void     createCommandPool();
   void     createPipelineLayout();
   void     createSwapchain();
   void     recreateSwapchain();
   void     destroySwapchain();
-  void     createImageViews();
+  void     createSwapchainImageViews();
   void     createPipeline();
   void     createRenderPass();
   void     createFramebuffer();

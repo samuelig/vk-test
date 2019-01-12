@@ -320,7 +320,7 @@ void VulkanTest::createCommandPool()
     throw std::runtime_error("Error creating command pool");
 }
 
-void VulkanTest::createCommandBuffer()
+void VulkanTest::createCommandBuffers()
 {
   VkResult res = VK_SUCCESS;
   /* Create command buffers */
@@ -391,12 +391,12 @@ void VulkanTest::recreateSwapchain()
 {
   destroySwapchain();
   createSwapchain();
-  createImageViews();
+  createSwapchainImageViews();
   createRenderPass();
   createDepthResources();
   createFramebuffer();
   createPipeline();
-  createCommandBuffer();
+  createCommandBuffers();
   recordCommandBuffers();
 }
 
@@ -415,6 +415,7 @@ void VulkanTest::destroySwapchain()
   for (unsigned i = 0; i < swapChainImageViews.size(); i++)
     vkDestroyImageView(device, swapChainImageViews[i], VK_NULL_HANDLE);
 
+  vkFreeMemory(device, depthImageMemory, VK_NULL_HANDLE);
   vkDestroyImageView(device, depthImageView, VK_NULL_HANDLE);
   vkDestroyImage(device, depthImage, VK_NULL_HANDLE);
 
@@ -505,7 +506,7 @@ void VulkanTest::createSwapchain()
   swapChainImageFormat = surfaceFormat.format;
 }
 
-void VulkanTest::createImageViews()
+void VulkanTest::createSwapchainImageViews()
 {
   VkResult res = VK_SUCCESS;
   swapChainImageViews.resize(swapChainImages.size());
@@ -1382,7 +1383,7 @@ void VulkanTest::createDepthResources()
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error creating depth image view");
 
-  /* Change layout */
+  /* Change depth image layout */
   VkCommandBuffer commandBuffer = beginCommandBuffer();
   VkImageMemoryBarrier barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1465,6 +1466,7 @@ void VulkanTest::cleanup()
 
   vkDestroyDevice(device, VK_NULL_HANDLE);
   DestroyDebugReportCallbackEXT(instance, callback, VK_NULL_HANDLE);
+  vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
   vkDestroyInstance(instance, VK_NULL_HANDLE);
 
   glfwDestroyWindow(window);
@@ -1482,12 +1484,11 @@ void VulkanTest::init()
   createDevice();
   getQueue();
   createSwapchain();
-  createImageViews();
+  createSwapchainImageViews();
   createRenderPass();
-  createCommandPool();
+  createCommandPool(); // Created here becase we will need to transition the layout of the depthImage
   createDepthResources();
   createFramebuffer();
-  createCommandBuffer();
   createPipeline();
   createVertexBuffer();
   createIndexBuffer();
@@ -1497,6 +1498,7 @@ void VulkanTest::init()
   createTextureSampler();
   createDescriptorPool();
   createDescriptorSet();
+  createCommandBuffers();
   recordCommandBuffers();
   createSemaphores();
 }
