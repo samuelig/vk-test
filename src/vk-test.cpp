@@ -5,9 +5,6 @@
 #include <algorithm>
 #include <array>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE // Vulkan's depth range from 0 to 1
-#include <glm/glm.hpp>
 // For rotating MVP matrices
 #include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
@@ -15,42 +12,21 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tinyobjloader/tiny_obj_loader.h>
+
 #include "vk-test.h"
 #include "vk-util.h"
 
+const int WIDTH = 800;
+const int HEIGHT = 600;
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+const std::string MODEL_PATH = "src/models/chalet.obj";
+const std::string TEXTURE_PATH = "src/textures/chalet.jpg";
 
 std::vector<const char*> validationLayers = {
     "VK_LAYER_LUNARG_standard_validation"
-};
-
-struct Vertex {
-  glm::vec3 pos;
-  glm::vec3 color;
-  glm::vec2 texCoord;
-};
-
-struct UniformBufferObject {
-  glm::mat4 model;
-  glm::mat4 view;
-  glm::mat4 proj;
-};
-
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
 };
 
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
@@ -673,11 +649,11 @@ void VulkanTest::createPipeline()
   depthStencil.depthWriteEnable = VK_TRUE;
   depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
   depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.minDepthBounds = 0.0f; // Optional
-  depthStencil.maxDepthBounds = 1.0f; // Optional
+  //depthStencil.minDepthBounds = 0.0f; // Optional
+  //depthStencil.maxDepthBounds = 1.0f; // Optional
   depthStencil.stencilTestEnable = VK_FALSE;
-  depthStencil.front = {}; // Optional
-  depthStencil.back = {}; // Optional
+  //depthStencil.front = {}; // Optional
+  //depthStencil.back = {}; // Optional
 
   VkGraphicsPipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -907,7 +883,7 @@ void VulkanTest::recordCommandBuffers()
     VkBuffer vertexBuffers[] = {vertexBuffer};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
@@ -956,6 +932,36 @@ void VulkanTest::fillBuffer(VkDeviceMemory bufferMemory, VkDeviceSize size, cons
   vkMapMemory(device, bufferMemory, 0, size, 0, &dataBuffer);
   memcpy(dataBuffer, data, (size_t) size);
   vkUnmapMemory(device, bufferMemory);
+}
+
+void VulkanTest::loadModel()
+{
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+  std::string warn, err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+    throw std::runtime_error(warn + err);
+  }
+
+  for (const auto& shape : shapes) {
+    for (const auto& index : shape.mesh.indices) {
+      Vertex vertex = {};
+      vertex.pos = {
+        attrib.vertices[3 * index.vertex_index + 0],
+        attrib.vertices[3 * index.vertex_index + 1],
+        attrib.vertices[3 * index.vertex_index + 2]
+      };
+
+      vertex.texCoord = {
+        attrib.texcoords[2 * index.texcoord_index + 0],
+        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+      };
+      vertices.push_back(vertex);
+      indices.push_back(indices.size());
+    }
+  }
 }
 
 void VulkanTest::createVertexBuffer()
@@ -1069,8 +1075,8 @@ void VulkanTest::updateUniformBuffer()
   auto currentTime = std::chrono::high_resolution_clock::now();
   float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
   UniformBufferObject ubo = {};
-  ubo.model = glm::mat4(1.0); //glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+  ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
   ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
   fillBuffer(uniformBufferMemory, sizeof(ubo), &ubo);
 }
@@ -1168,7 +1174,7 @@ void VulkanTest::createTextureImage()
 {
   VkResult res = VK_SUCCESS;
   int texWidth, texHeight, texChannels;
-  stbi_uc* pixels = stbi_load("src/textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+  stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
   VkDeviceSize imageSize = texWidth * texHeight * 4;
 
   if (!pixels)
@@ -1527,6 +1533,7 @@ void VulkanTest::init()
   createDepthResources();
   createFramebuffer();
   createPipeline();
+  loadModel();
   createVertexBuffer();
   createIndexBuffer();
   createUniformBuffer();

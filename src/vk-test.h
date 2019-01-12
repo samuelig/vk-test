@@ -6,8 +6,21 @@
 #include <vector>
 #include <string>
 
-const int WIDTH = 800;
-const int HEIGHT = 600;
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE // Vulkan's depth range from 0 to 1
+#include <glm/glm.hpp>
+
+struct Vertex {
+  glm::vec3 pos;
+  glm::vec3 color;
+  glm::vec2 texCoord;
+};
+
+struct UniformBufferObject {
+  glm::mat4 model;
+  glm::mat4 view;
+  glm::mat4 proj;
+};
 
 class VulkanTest {
  public:
@@ -39,6 +52,7 @@ class VulkanTest {
   void     createRenderPass();
   void     createFramebuffer();
   void     createSyncObjects();
+  void     loadModel();
   void     createVertexBuffer();
   void     createIndexBuffer();
   void     createUniformBuffer();
@@ -103,6 +117,8 @@ class VulkanTest {
   std::vector<VkFence> inFlightFences;
   size_t           currentFrame = 0;
 
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
   VkBuffer         vertexBuffer;
   VkDeviceMemory   vertexBufferMemory;
   VkBuffer         indexBuffer;
