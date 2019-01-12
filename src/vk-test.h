@@ -18,6 +18,8 @@ class VulkanTest {
   void     cleanup();
   void     run();
 
+  bool             framebufferResized = false;
+
  private:
 
   /* Functions to prepare rendering */
@@ -36,7 +38,7 @@ class VulkanTest {
   void     createPipeline();
   void     createRenderPass();
   void     createFramebuffer();
-  void     createSemaphores();
+  void     createSyncObjects();
   void     createVertexBuffer();
   void     createIndexBuffer();
   void     createUniformBuffer();
@@ -96,8 +98,10 @@ class VulkanTest {
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkFramebuffer> swapChainFramebuffers;
 
-  VkSemaphore      imageAvailableSemaphore;
-  VkSemaphore      renderFinishedSemaphore;
+  std::vector<VkSemaphore>      imageAvailableSemaphore;
+  std::vector<VkSemaphore>      renderFinishedSemaphore;
+  std::vector<VkFence> inFlightFences;
+  size_t           currentFrame = 0;
 
   VkBuffer         vertexBuffer;
   VkDeviceMemory   vertexBufferMemory;

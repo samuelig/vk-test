@@ -18,6 +18,8 @@
 #include "vk-test.h"
 #include "vk-util.h"
 
+const int MAX_FRAMES_IN_FLIGHT = 2;
+
 std::vector<const char*> validationLayers = {
     "VK_LAYER_LUNARG_standard_validation"
 };
@@ -112,6 +114,11 @@ void VulkanTest::setupDebugCallback()
   }
 }
 
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+        auto app = reinterpret_cast<VulkanTest*>(glfwGetWindowUserPointer(window));
+        app->framebufferResized = true;
+}
+
 void VulkanTest::initWindow()
 {
   glfwInit();
@@ -122,6 +129,8 @@ void VulkanTest::initWindow()
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
   window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL, NULL);
+  glfwSetWindowUserPointer(window, this);
+  glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 }
 
 void VulkanTest::createInstance()
@@ -389,6 +398,8 @@ void VulkanTest::createPipelineLayout()
 
 void VulkanTest::recreateSwapchain()
 {
+  vkDeviceWaitIdle(device);
+
   destroySwapchain();
   createSwapchain();
   createSwapchainImageViews();
@@ -774,24 +785,38 @@ void VulkanTest::createFramebuffer()
   }
 }
 
-void VulkanTest::createSemaphores()
+void VulkanTest::createSyncObjects()
 {
+  imageAvailableSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
+  renderFinishedSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
+  inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+
   /* Create semaphores to know when an swapchain image is ready and when the rendering has finished */
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  if (vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &imageAvailableSemaphore) != VK_SUCCESS ||
-      vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &renderFinishedSemaphore) != VK_SUCCESS)
-    throw std::runtime_error("Error creating semaphores");
 
+  VkFenceCreateInfo fenceInfo = {};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    if (vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &imageAvailableSemaphore[i]) != VK_SUCCESS ||
+        vkCreateSemaphore(device, &semaphoreInfo, VK_NULL_HANDLE, &renderFinishedSemaphore[i]) != VK_SUCCESS ||
+        vkCreateFence(device, &fenceInfo, VK_NULL_HANDLE, &inFlightFences[i]) != VK_SUCCESS)
+      throw std::runtime_error("Error creating semaphores for a frame");
+  }
   printf("Created the semaphores used for getting swapchain images and know when it finished rendering\n");
 }
 
 void VulkanTest::drawFrame()
 {
+  vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+
   VkResult res = VK_SUCCESS;
   /* Acquire next image to draw into */
   uint32_t imageIndex;
-  res = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+  res = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
   if (res == VK_ERROR_OUT_OF_DATE_KHR) {
     recreateSwapchain();
@@ -805,7 +830,7 @@ void VulkanTest::drawFrame()
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-  VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
+  VkSemaphore waitSemaphores[] = {imageAvailableSemaphore[currentFrame]};
   VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
@@ -814,12 +839,14 @@ void VulkanTest::drawFrame()
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
 
-  VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
+  VkSemaphore signalSemaphores[] = {renderFinishedSemaphore[currentFrame]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
+  vkResetFences(device, 1, &inFlightFences[currentFrame]);
+
   /* Submit work to the queue */
-  res = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  res = vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]);
   if (res != VK_SUCCESS)
     throw std::runtime_error("Error submitting draw command buffer");
 
@@ -835,9 +862,16 @@ void VulkanTest::drawFrame()
 
   presentInfo.pImageIndices = &imageIndex;
 
-  vkQueuePresentKHR(presentQueue, &presentInfo);
+  res = vkQueuePresentKHR(presentQueue, &presentInfo);
 
-  vkQueueWaitIdle(presentQueue);
+  if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || framebufferResized) {
+    framebufferResized = false;
+    recreateSwapchain();
+  } else if (res != VK_SUCCESS) {
+    throw std::runtime_error("failed to present swap chain image!");
+  }
+
+  currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void VulkanTest::recordCommandBuffers()
@@ -1444,8 +1478,11 @@ VkFormat VulkanTest::findSupportedFormat(const std::vector<VkFormat>& candidates
 
 void VulkanTest::cleanup()
 {
-  vkDestroySemaphore(device, renderFinishedSemaphore, VK_NULL_HANDLE);
-  vkDestroySemaphore(device, imageAvailableSemaphore, VK_NULL_HANDLE);
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vkDestroySemaphore(device, renderFinishedSemaphore[i], VK_NULL_HANDLE);
+    vkDestroySemaphore(device, imageAvailableSemaphore[i], VK_NULL_HANDLE);
+    vkDestroyFence(device, inFlightFences[i], VK_NULL_HANDLE);
+  }
 
   vkDestroyDescriptorPool(device, descriptorPool, VK_NULL_HANDLE);
 
@@ -1500,7 +1537,7 @@ void VulkanTest::init()
   createDescriptorSet();
   createCommandBuffers();
   recordCommandBuffers();
-  createSemaphores();
+  createSyncObjects();
 }
 
 void VulkanTest::run()
