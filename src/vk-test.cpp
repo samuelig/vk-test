@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <array>
+#include <unordered_map>
 
 // For rotating MVP matrices
 #include <glm/gtc/matrix_transform.hpp>
@@ -945,6 +946,8 @@ void VulkanTest::loadModel()
     throw std::runtime_error(warn + err);
   }
 
+  std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
+
   for (const auto& shape : shapes) {
     for (const auto& index : shape.mesh.indices) {
       Vertex vertex = {};
@@ -958,8 +961,13 @@ void VulkanTest::loadModel()
         attrib.texcoords[2 * index.texcoord_index + 0],
         1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
       };
-      vertices.push_back(vertex);
-      indices.push_back(indices.size());
+
+      vertex.color = {1.0f, 1.0f, 1.0f};
+      if (uniqueVertices.count(vertex) == 0) {
+        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+        vertices.push_back(vertex);
+      }
+      indices.push_back(uniqueVertices[vertex]);
     }
   }
 }
