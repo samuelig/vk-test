@@ -6,7 +6,6 @@
 *.lo
 *.log
 *.o
-*.obj
 *.orig
 *.os
 *.pc
