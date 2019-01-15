@@ -189,6 +189,17 @@ void VulkanTest::createDevice()
   /* Select the first one */
   phyDevice = physicalDevices[0];
 #endif
+  VkPhysicalDeviceProperties physicalDeviceProperties;
+  vkGetPhysicalDeviceProperties(phyDevice, &physicalDeviceProperties);
+
+  VkSampleCountFlags counts = std::min(physicalDeviceProperties.limits.framebufferColorSampleCounts, physicalDeviceProperties.limits.framebufferDepthSampleCounts);
+  if (counts & VK_SAMPLE_COUNT_64_BIT) { msaaSamples = VK_SAMPLE_COUNT_64_BIT; }
+  else if (counts & VK_SAMPLE_COUNT_32_BIT) { msaaSamples = VK_SAMPLE_COUNT_32_BIT; }
+  else if (counts & VK_SAMPLE_COUNT_16_BIT) { msaaSamples = VK_SAMPLE_COUNT_16_BIT; }
+  else if (counts & VK_SAMPLE_COUNT_8_BIT) { msaaSamples = VK_SAMPLE_COUNT_8_BIT; }
+  else if (counts & VK_SAMPLE_COUNT_4_BIT) { msaaSamples = VK_SAMPLE_COUNT_4_BIT; }
+  else if (counts & VK_SAMPLE_COUNT_2_BIT) { msaaSamples = VK_SAMPLE_COUNT_2_BIT; }
+  else msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
   VkPhysicalDeviceFeatures supportedFeatures;
   vkGetPhysicalDeviceFeatures(phyDevice, &supportedFeatures);
@@ -199,7 +210,6 @@ void VulkanTest::createDevice()
    */
   if (!supportedFeatures.samplerAnisotropy)
     throw std::runtime_error("Device doesn't support anisotropy sampling");
-
 
   /* Ask for queues properties, etc */
   vkGetPhysicalDeviceQueueFamilyProperties(phyDevice, &count, VK_NULL_HANDLE);
@@ -382,6 +392,7 @@ void VulkanTest::recreateSwapchain()
   createSwapchainImageViews();
   createRenderPass();
   createDepthResources();
+  createColorResources();
   createFramebuffer();
   createPipeline();
   createCommandBuffers();
@@ -406,6 +417,10 @@ void VulkanTest::destroySwapchain()
   vkFreeMemory(device, depthImageMemory, VK_NULL_HANDLE);
   vkDestroyImageView(device, depthImageView, VK_NULL_HANDLE);
   vkDestroyImage(device, depthImage, VK_NULL_HANDLE);
+
+  vkFreeMemory(device, colorImageMemory, VK_NULL_HANDLE);
+  vkDestroyImageView(device, colorImageView, VK_NULL_HANDLE);
+  vkDestroyImage(device, colorImage, VK_NULL_HANDLE);
 
   vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
 }
@@ -624,7 +639,7 @@ void VulkanTest::createPipeline()
   VkPipelineMultisampleStateCreateInfo multisampling = {};
   multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  multisampling.rasterizationSamples = msaaSamples;
 
   VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
   colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -688,23 +703,33 @@ void VulkanTest::createRenderPass()
 
   VkAttachmentDescription colorAttachment = {};
   colorAttachment.format = swapChainImageFormat;
-  colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  colorAttachment.samples = msaaSamples;
   colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
   VkAttachmentDescription depthAttachment = {};
   depthAttachment.format = findDepthFormat();
-  depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  depthAttachment.samples = msaaSamples;
   depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+  VkAttachmentDescription colorAttachmentResolve = {};
+  colorAttachmentResolve.format = swapChainImageFormat;
+  colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+  colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
   VkAttachmentReference colorAttachmentRef = {};
   colorAttachmentRef.attachment = 0;
@@ -714,13 +739,18 @@ void VulkanTest::createRenderPass()
   depthAttachmentRef.attachment = 1;
   depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+  VkAttachmentReference colorAttachmentResolveRef = {};
+  colorAttachmentResolveRef.attachment = 2;
+  colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
   VkSubpassDescription subpass = {};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colorAttachmentRef;
   subpass.pDepthStencilAttachment = &depthAttachmentRef;
+  subpass.pResolveAttachments = &colorAttachmentResolveRef;
 
-  std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+  std::array<VkAttachmentDescription, 3> attachments = {colorAttachment, depthAttachment, colorAttachmentResolve};
 
   VkRenderPassCreateInfo renderPassInfo = {};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -742,9 +772,10 @@ void VulkanTest::createFramebuffer()
   swapChainFramebuffers.resize(swapChainImageViews.size());
 
   for (unsigned i = 0; i < swapChainImageViews.size(); i++) {
-    std::array<VkImageView, 2> attachments = {
+    std::array<VkImageView, 3> attachments = {
+      colorImageView,
+      depthImageView,
       swapChainImageViews[i],
-      depthImageView
     };
 
     VkFramebufferCreateInfo framebufferInfo = {};
@@ -1449,6 +1480,95 @@ void VulkanTest::createTextureSampler()
   printf("Created Texture Sampler\n");
 }
 
+void VulkanTest::createColorResources()
+{
+  VkResult res = VK_SUCCESS;
+  VkFormat colorFormat = swapChainImageFormat;
+
+  VkImageCreateInfo imageInfo = {};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = swapChainExtent.width;
+  imageInfo.extent.height = swapChainExtent.height;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = colorFormat;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = msaaSamples;
+  imageInfo.flags = 0; // Optional
+
+  res = vkCreateImage(device, &imageInfo, VK_NULL_HANDLE, &colorImage);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating image");
+
+  printf("Created color msaa image\n");
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, depthImage, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  res = vkAllocateMemory(device, &allocInfo, nullptr, &colorImageMemory);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error allocating image memory!");
+
+  vkBindImageMemory(device, colorImage, colorImageMemory, 0);
+
+  VkImageViewCreateInfo createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  createInfo.image = colorImage;
+  createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  createInfo.format = colorFormat;
+  createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+  createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  createInfo.subresourceRange.baseMipLevel = 0;
+  createInfo.subresourceRange.levelCount = 1;
+  createInfo.subresourceRange.baseArrayLayer = 0;
+  createInfo.subresourceRange.layerCount = 1;
+
+  res = vkCreateImageView(device, &createInfo, VK_NULL_HANDLE, &colorImageView);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating color msaa image view");
+
+  /* Change color image layout */
+  VkCommandBuffer commandBuffer = beginCommandBuffer();
+  VkImageMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = colorImage;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = 0;
+  barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    0,
+    0, VK_NULL_HANDLE,
+    0, VK_NULL_HANDLE,
+    1, &barrier);
+  endCommandBufferAndSubmit(commandBuffer);
+
+  printf("Changed layout color msaa image\n");
+}
+
 void VulkanTest::createDepthResources()
 {
   /* XXX: Don't use stencil format yet */
@@ -1468,7 +1588,7 @@ void VulkanTest::createDepthResources()
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.samples = msaaSamples;
   imageInfo.flags = 0; // Optional
 
   res = vkCreateImage(device, &imageInfo, VK_NULL_HANDLE, &depthImage);
@@ -1618,6 +1738,7 @@ void VulkanTest::init()
   createRenderPass();
   createCommandPool(); // Created here becase we will need to transition the layout of the depthImage
   createDepthResources();
+  createColorResources();
   createFramebuffer();
   createPipeline();
   loadModel();

@@ -75,6 +75,7 @@ class VulkanTest {
   void     createTextureImage();
   void     createTextureImageView();
   void     createTextureSampler();
+  void     createColorResources();
   void     createDepthResources();
   void     createDescriptorPool();
   void     createDescriptorSet();
@@ -107,6 +108,7 @@ class VulkanTest {
 
   VkPhysicalDevice phyDevice;
   VkDevice         device;
+  VkSampleCountFlagBits msaaSamples;
 
   int              queueGraphicsFamilyIndex;
   int              queuePresentationFamilyIndex;
@@ -154,4 +156,8 @@ class VulkanTest {
   VkImage          depthImage;
   VkDeviceMemory   depthImageMemory;
   VkImageView      depthImageView;
+
+  VkImage          colorImage;
+  VkDeviceMemory   colorImageMemory;
+  VkImageView      colorImageView;
 };
