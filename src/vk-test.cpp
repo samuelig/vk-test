@@ -126,7 +126,7 @@ void VulkanTest::createInstance()
   const char **instanceExtensionsGLFW;
   instanceExtensionsGLFW = glfwGetRequiredInstanceExtensions(&requiredInstanceExtensionsCount);
   printf("Required instance extensions for GLFW: \n");
-  for (int i = 0; i < requiredInstanceExtensionsCount; i++) {
+  for (unsigned i = 0; i < requiredInstanceExtensionsCount; i++) {
     instanceExtensions.push_back(instanceExtensionsGLFW[i]);
     printf("\t%s\n", instanceExtensionsGLFW[i]);
   }
@@ -367,6 +367,8 @@ void VulkanTest::createPipelineLayout()
   descriptorSetLayoutInfo.pBindings = bindings.data();
 
   res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, VK_NULL_HANDLE, &setLayout);
+  if (res != VK_SUCCESS)
+    throw std::runtime_error("Error creating descriptor set layout");
 
   /* Create Pipeline Layout */
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
@@ -1005,7 +1007,6 @@ void VulkanTest::loadModel()
 
 void VulkanTest::createVertexBuffer()
 {
-  VkResult res = VK_SUCCESS;
   VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
   createBuffer(bufferSize,
@@ -1019,7 +1020,6 @@ void VulkanTest::createVertexBuffer()
 
 void VulkanTest::createIndexBuffer()
 {
-  VkResult res = VK_SUCCESS;
   VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
   /* For testing, I am going to use a staging buffer, even when for Intel GPU
@@ -1099,7 +1099,6 @@ VkCommandBuffer VulkanTest::beginCommandBuffer()
 
 void VulkanTest::createUniformBuffer()
 {
-  VkResult res = VK_SUCCESS;
   VkDeviceSize bufferSize = sizeof(UniformBufferObject);
   createBuffer(bufferSize,
                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -1270,12 +1269,6 @@ void VulkanTest::createTextureImage()
   printf("Created image\n");
 
   /* Copy the data */
-  VkCommandBufferAllocateInfo allocCmdInfo = {};
-  allocCmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocCmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocCmdInfo.commandPool = cmdPool;
-  allocCmdInfo.commandBufferCount = 1;
-
   VkCommandBuffer commandBuffer = beginCommandBuffer();
 
   /* Change layout */
