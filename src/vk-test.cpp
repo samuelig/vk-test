@@ -1508,7 +1508,7 @@ void VulkanTest::createColorResources()
   printf("Created color msaa image\n");
 
   VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(device, depthImage, &memRequirements);
+  vkGetImageMemoryRequirements(device, colorImage, &memRequirements);
 
   VkMemoryAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1555,7 +1555,7 @@ void VulkanTest::createColorResources()
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
   barrier.srcAccessMask = 0;
-  barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+  barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
   vkCmdPipelineBarrier(
     commandBuffer,
