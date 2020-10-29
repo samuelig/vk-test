@@ -27,7 +27,7 @@ const std::string MODEL_PATH = "src/models/chalet.obj";
 const std::string TEXTURE_PATH = "src/textures/chalet.jpg";
 
 std::vector<const char*> validationLayers = {
-    "VK_LAYER_LUNARG_standard_validation"
+    "VK_LAYER_KHRONOS_validation"
 };
 
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
