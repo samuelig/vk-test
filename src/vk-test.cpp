@@ -476,7 +476,7 @@ void VulkanTest::createSwapchain()
     throw std::runtime_error("VK_FORMAT_B8G8R8A8_UNORM is not supported");
 
   /* This presentation mode is always supported according to the spec */
-  VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  VkPresentModeKHR presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
 
   /* Select the extend to current window size */
   swapChainExtent = {width, height};
