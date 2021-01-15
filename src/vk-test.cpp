@@ -131,12 +131,12 @@ void VulkanTest::createInstance()
     printf("\t%s\n", instanceExtensionsGLFW[i]);
   }
 
-  if (ENABLE_DEBUG)
+  if (0 && ENABLE_DEBUG)
     instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
   else
     validationLayers.clear();
 
-  if (ENABLE_DEBUG && !checkValidationLayerSupport())
+  if (0 && ENABLE_DEBUG && !checkValidationLayerSupport())
     throw std::runtime_error("No validation layers");
 
   VkInstanceCreateInfo createInfo = {};
@@ -1721,7 +1721,7 @@ void VulkanTest::init()
 {
   initWindow();
   createInstance();
-  if (ENABLE_DEBUG)
+  if (0 && ENABLE_DEBUG)
     setupDebugCallback();
   createSurface();
   createDevice();
@@ -1746,6 +1746,18 @@ void VulkanTest::init()
   createCommandBuffers();
   recordCommandBuffers();
   createSyncObjects();
+
+  VkPhysicalDeviceMemoryBudgetPropertiesEXT memoryBudget;
+  memset(&memoryBudget, 0, sizeof(memoryBudget));
+  memoryBudget.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+  memoryBudget.pNext = VK_NULL_HANDLE;
+  VkPhysicalDeviceMemoryProperties2    memoryProperties;
+  memset(&memoryProperties, 0, sizeof(memoryProperties));
+  memoryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+  memoryProperties.pNext = &memoryBudget;
+  vkGetPhysicalDeviceMemoryProperties2(phyDevice, &memoryProperties);
+
+  printf("Memory budget: usage %ld, budget %ld\n", (uint64_t)memoryBudget.heapUsage[0], (uint64_t)memoryBudget.heapBudget[0]);
 }
 
 void VulkanTest::run()
