@@ -139,6 +139,8 @@ void VulkanTest::createInstance()
   if (ENABLE_DEBUG && !checkValidationLayerSupport())
     throw std::runtime_error("No validation layers");
 
+  instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
   VkInstanceCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   createInfo.pNext = VK_NULL_HANDLE;
@@ -262,12 +264,24 @@ void VulkanTest::createDevice()
   }
 
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  deviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+
   VkPhysicalDeviceFeatures deviceFeatures = {};
   deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+  VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamic = {};
+  extendedDynamic.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+  extendedDynamic.extendedDynamicState = VK_TRUE;
+  extendedDynamic.pNext = VK_NULL_HANDLE;
+
+  VkPhysicalDeviceFeatures2 deviceFeatures2 = {};
+  deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  deviceFeatures2.features = deviceFeatures;
+  deviceFeatures2.pNext = &extendedDynamic;
+
   VkDeviceCreateInfo deviceCreateInfo = {};
   deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  deviceCreateInfo.pNext = VK_NULL_HANDLE;
+  deviceCreateInfo.pNext = &deviceFeatures2;
   deviceCreateInfo.flags = 0;
   deviceCreateInfo.queueCreateInfoCount = (unsigned)queueCreateInfos.size();
   deviceCreateInfo.pQueueCreateInfos = &queueCreateInfos[0];
@@ -275,7 +289,7 @@ void VulkanTest::createDevice()
   deviceCreateInfo.ppEnabledLayerNames = VK_NULL_HANDLE;
   deviceCreateInfo.enabledExtensionCount = (unsigned)deviceExtensions.size();
   deviceCreateInfo.ppEnabledExtensionNames = &deviceExtensions[0];
-  deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+  deviceCreateInfo.pEnabledFeatures = VK_NULL_HANDLE;
 
   res = vkCreateDevice(phyDevice, &deviceCreateInfo, VK_NULL_HANDLE, &device);
   if (res != VK_SUCCESS)
@@ -663,6 +677,7 @@ void VulkanTest::createPipeline()
 
   VkPipelineDepthStencilStateCreateInfo depthStencil = {};
   depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.pNext = VK_NULL_HANDLE;
   depthStencil.depthTestEnable = VK_TRUE;
   depthStencil.depthWriteEnable = VK_TRUE;
   depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
@@ -672,6 +687,15 @@ void VulkanTest::createPipeline()
   depthStencil.stencilTestEnable = VK_FALSE;
   //depthStencil.front = {}; // Optional
   //depthStencil.back = {}; // Optional
+
+  std::array<VkDynamicState, 1> dynamic_states = {};
+  dynamic_states[0] = VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE_EXT;
+
+  VkPipelineDynamicStateCreateInfo dynamicStateInfo = {};
+  dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dynamicStateInfo.pNext = VK_NULL_HANDLE;
+  dynamicStateInfo.dynamicStateCount = 1u;
+  dynamicStateInfo.pDynamicStates = &dynamic_states[0];
 
   VkGraphicsPipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -688,6 +712,7 @@ void VulkanTest::createPipeline()
   pipelineInfo.renderPass = renderPass;
   pipelineInfo.subpass = 0;
   pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+  pipelineInfo.pDynamicState = &dynamicStateInfo;
 
   res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_NULL_HANDLE, &graphicsPipeline);
   if (res != VK_SUCCESS)
@@ -912,6 +937,9 @@ void VulkanTest::recordCommandBuffers()
     vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    PFN_vkCmdSetDepthTestEnableEXT vkCmdSetDepthTestEnableEXT = (PFN_vkCmdSetDepthTestEnableEXT)vkGetInstanceProcAddr(instance, "vkCmdSetDepthTestEnableEXT");
+    vkCmdSetDepthTestEnableEXT(commandBuffers[i], i % 2 ? VK_TRUE : VK_FALSE);
+    
     vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, VK_NULL_HANDLE);
 
     VkBuffer vertexBuffers[] = {vertexBuffer};
